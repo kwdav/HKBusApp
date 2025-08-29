@@ -1,0 +1,570 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		A21C5DE72E544F2A00D4ADBC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A21C5DC52E544F2900D4ADBC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A21C5DCC2E544F2900D4ADBC;
+			remoteInfo = HKBusApp;
+		};
+		A21C5DF12E544F2A00D4ADBC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A21C5DC52E544F2900D4ADBC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A21C5DCC2E544F2900D4ADBC;
+			remoteInfo = HKBusApp;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A21C5DCD2E544F2900D4ADBC /* HKBusApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HKBusApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A21C5DE62E544F2A00D4ADBC /* HKBusAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HKBusAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A21C5DF02E544F2A00D4ADBC /* HKBusAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HKBusAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A21C5DF82E544F2A00D4ADBC /* Exceptions for "HKBusApp" folder in "HKBusApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A21C5DCC2E544F2900D4ADBC /* HKBusApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		A21C5DCF2E544F2900D4ADBC /* HKBusApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A21C5DF82E544F2A00D4ADBC /* Exceptions for "HKBusApp" folder in "HKBusApp" target */,
+			);
+			path = HKBusApp;
+			sourceTree = "<group>";
+		};
+		A21C5DE92E544F2A00D4ADBC /* HKBusAppTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HKBusAppTests;
+			sourceTree = "<group>";
+		};
+		A21C5DF32E544F2A00D4ADBC /* HKBusAppUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HKBusAppUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A21C5DCA2E544F2900D4ADBC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A21C5DE32E544F2A00D4ADBC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A21C5DED2E544F2A00D4ADBC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A21C5DC42E544F2900D4ADBC = {
+			isa = PBXGroup;
+			children = (
+				A21C5DCF2E544F2900D4ADBC /* HKBusApp */,
+				A21C5DE92E544F2A00D4ADBC /* HKBusAppTests */,
+				A21C5DF32E544F2A00D4ADBC /* HKBusAppUITests */,
+				A21C5DCE2E544F2900D4ADBC /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A21C5DCE2E544F2900D4ADBC /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A21C5DCD2E544F2900D4ADBC /* HKBusApp.app */,
+				A21C5DE62E544F2A00D4ADBC /* HKBusAppTests.xctest */,
+				A21C5DF02E544F2A00D4ADBC /* HKBusAppUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A21C5DCC2E544F2900D4ADBC /* HKBusApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A21C5DF92E544F2A00D4ADBC /* Build configuration list for PBXNativeTarget "HKBusApp" */;
+			buildPhases = (
+				A21C5DC92E544F2900D4ADBC /* Sources */,
+				A21C5DCA2E544F2900D4ADBC /* Frameworks */,
+				A21C5DCB2E544F2900D4ADBC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A21C5DCF2E544F2900D4ADBC /* HKBusApp */,
+			);
+			name = HKBusApp;
+			packageProductDependencies = (
+			);
+			productName = HKBusApp;
+			productReference = A21C5DCD2E544F2900D4ADBC /* HKBusApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A21C5DE52E544F2A00D4ADBC /* HKBusAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A21C5DFE2E544F2A00D4ADBC /* Build configuration list for PBXNativeTarget "HKBusAppTests" */;
+			buildPhases = (
+				A21C5DE22E544F2A00D4ADBC /* Sources */,
+				A21C5DE32E544F2A00D4ADBC /* Frameworks */,
+				A21C5DE42E544F2A00D4ADBC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A21C5DE82E544F2A00D4ADBC /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A21C5DE92E544F2A00D4ADBC /* HKBusAppTests */,
+			);
+			name = HKBusAppTests;
+			packageProductDependencies = (
+			);
+			productName = HKBusAppTests;
+			productReference = A21C5DE62E544F2A00D4ADBC /* HKBusAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A21C5DEF2E544F2A00D4ADBC /* HKBusAppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A21C5E012E544F2A00D4ADBC /* Build configuration list for PBXNativeTarget "HKBusAppUITests" */;
+			buildPhases = (
+				A21C5DEC2E544F2A00D4ADBC /* Sources */,
+				A21C5DED2E544F2A00D4ADBC /* Frameworks */,
+				A21C5DEE2E544F2A00D4ADBC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A21C5DF22E544F2A00D4ADBC /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A21C5DF32E544F2A00D4ADBC /* HKBusAppUITests */,
+			);
+			name = HKBusAppUITests;
+			packageProductDependencies = (
+			);
+			productName = HKBusAppUITests;
+			productReference = A21C5DF02E544F2A00D4ADBC /* HKBusAppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A21C5DC52E544F2900D4ADBC /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					A21C5DCC2E544F2900D4ADBC = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					A21C5DE52E544F2A00D4ADBC = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = A21C5DCC2E544F2900D4ADBC;
+					};
+					A21C5DEF2E544F2A00D4ADBC = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = A21C5DCC2E544F2900D4ADBC;
+					};
+				};
+			};
+			buildConfigurationList = A21C5DC82E544F2900D4ADBC /* Build configuration list for PBXProject "HKBusApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A21C5DC42E544F2900D4ADBC;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A21C5DCE2E544F2900D4ADBC /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A21C5DCC2E544F2900D4ADBC /* HKBusApp */,
+				A21C5DE52E544F2A00D4ADBC /* HKBusAppTests */,
+				A21C5DEF2E544F2A00D4ADBC /* HKBusAppUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A21C5DCB2E544F2900D4ADBC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A21C5DE42E544F2A00D4ADBC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A21C5DEE2E544F2A00D4ADBC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A21C5DC92E544F2900D4ADBC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A21C5DE22E544F2A00D4ADBC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A21C5DEC2E544F2A00D4ADBC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A21C5DE82E544F2A00D4ADBC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A21C5DCC2E544F2900D4ADBC /* HKBusApp */;
+			targetProxy = A21C5DE72E544F2A00D4ADBC /* PBXContainerItemProxy */;
+		};
+		A21C5DF22E544F2A00D4ADBC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A21C5DCC2E544F2900D4ADBC /* HKBusApp */;
+			targetProxy = A21C5DF12E544F2A00D4ADBC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A21C5DFA2E544F2A00D4ADBC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 82423RY779;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HKBusApp/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.answertick.HKBusApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A21C5DFB2E544F2A00D4ADBC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 82423RY779;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HKBusApp/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.answertick.HKBusApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A21C5DFC2E544F2A00D4ADBC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A21C5DFD2E544F2A00D4ADBC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A21C5DFF2E544F2A00D4ADBC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.answertick.HKBusApp.HKBusAppTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HKBusApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HKBusApp";
+			};
+			name = Debug;
+		};
+		A21C5E002E544F2A00D4ADBC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.answertick.HKBusApp.HKBusAppTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HKBusApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HKBusApp";
+			};
+			name = Release;
+		};
+		A21C5E022E544F2A00D4ADBC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.answertick.HKBusApp.HKBusAppUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = HKBusApp;
+			};
+			name = Debug;
+		};
+		A21C5E032E544F2A00D4ADBC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.answertick.HKBusApp.HKBusAppUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = HKBusApp;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A21C5DC82E544F2900D4ADBC /* Build configuration list for PBXProject "HKBusApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A21C5DFC2E544F2A00D4ADBC /* Debug */,
+				A21C5DFD2E544F2A00D4ADBC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A21C5DF92E544F2A00D4ADBC /* Build configuration list for PBXNativeTarget "HKBusApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A21C5DFA2E544F2A00D4ADBC /* Debug */,
+				A21C5DFB2E544F2A00D4ADBC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A21C5DFE2E544F2A00D4ADBC /* Build configuration list for PBXNativeTarget "HKBusAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A21C5DFF2E544F2A00D4ADBC /* Debug */,
+				A21C5E002E544F2A00D4ADBC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A21C5E012E544F2A00D4ADBC /* Build configuration list for PBXNativeTarget "HKBusAppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A21C5E022E544F2A00D4ADBC /* Debug */,
+				A21C5E032E544F2A00D4ADBC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A21C5DC52E544F2900D4ADBC /* Project object */;
+}

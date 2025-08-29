@@ -1,0 +1,277 @@
+html{
+    font-size: 18px;
+
+}
+body{
+    margin: 0;
+    background-color: #000;
+    color: #FFF;
+    font-family: sans-serif;
+    padding-top: env(safe-area-inset-top);
+    min-height: calc(100vh - env(safe-area-inset-top));
+    ;
+}
+.top-fixed-bar{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 10;
+    display: flex;
+    height: env(safe-area-inset-top);
+    background: rgb(0,0,0, 0.8);
+    backdrop-filter: blur(10px);
+    backdrop-filter: grayscale(100%) ;
+}
+.top-fixed-bar.grad{
+    background: rgb(0,0,0.8);
+    background: linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+}
+.context{
+    background-color: none;
+    padding-bottom: calc(120px + env(safe-area-inset-bottom));
+}
+.busData{
+    width: 100%;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+    margin: auto;
+    
+}
+.eta-item{
+    font-size: 1rem;
+    height: 90px;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    border-top: 1px solid rgba(0,0,0, 0.8);
+    border-bottom: 1px solid rgba(255,255,255, 0.1);
+    justify-content: space-between;
+    align-items: center;
+}
+.eta-item .route-number{
+    width: 110px;
+    overflow: hidden;
+    font-size: 2em;
+    font-family: 'Chivo Mono', sans-serif, monospace;
+    line-height: 1.2em;
+    vertical-align: middle;
+    padding-left: 8px;
+    box-sizing: border-box;
+}
+.eta-item.eta-CTB .route-number{
+    border-left: 4px solid #AA0;
+}
+.eta-item.eta-KMB .route-number{
+    border-left: 4px solid #A00;
+}
+.eta-item .route-stop{
+    flex-grow: 1;
+}
+.eta-item .route-stop .stop-name{
+    font-size: 0.7em;
+}
+.eta-item .route-stop .stop-dest{
+    font-size: 0.6em;
+    color: #999;
+}
+.eta-item .eta, .bus-stop-list .eta{
+    width: 140px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+.eta-item .eta ol, .bus-stop-list .eta ol{
+    margin: 0;
+    list-style-type:none;
+    padding-left: 10px;
+}
+.eta-item .eta ol li, .bus-stop-list .eta ol li{
+    line-height: 1.2em;
+    display: flex;
+    flex-direction: row;
+    align-items: end;
+    gap: 4px;
+    font-weight: bold;
+    padding: 0;
+}
+
+.eta-item .eta ol li.eta-1st, .bus-stop-list .eta ol li.eta-1st{ font-size:1.22em; margin-bottom: 0.1em; color: aqua;}
+.eta-item .eta ol li.eta-2nd, .bus-stop-list .eta ol li.eta-2nd{ font-size:0.9em; opacity: 0.8;}
+.eta-item .eta ol li.eta-3rd, .bus-stop-list .eta ol li.eta-3rd{ font-size:0.9em; opacity: 0.8;}
+.eta-item .eta ol li .min, .bus-stop-list .eta ol li .min{
+    font-size: 0.8em;
+    display: block;
+    font-weight: normal;
+}
+.eta-item .eta ol li .time, .bus-stop-list .eta ol li .time{
+    font-size: 0.65em;
+    color: #999;
+    flex: 1;
+    padding-left: 2px;
+}
+
+
+.busDataSubTitle{
+    background-color: #333;
+    position: sticky;
+    top: 0;
+    padding: 2px 4px;
+    font-size: 0.75rem;
+    z-index: 5;
+    box-shadow: 0px 0px 8px rgba(0,0,0, 0.5);
+    top: env(safe-area-inset-top);
+}
+
+.button-bar{
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    display: grid;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+.button-bar .refreshButton{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    height: 44px;
+    border-radius: 22px;
+    width: 75%;
+    font-size: 1rem;
+    text-decoration: none;
+    transition-property: width, opacity, transform;
+    transition-duration: 0.2s;
+    transition-timing-function: ease-in-out;
+    background-color: #FFF;
+    color: #222;
+    display: none;
+}
+@keyframes buttonRefresh {
+    0% {
+      background: orange;
+    }
+    /* Adding a step in the middle */
+    50% {
+      background: blue;
+    }
+    100% {
+      background: black;
+    }
+  }
+body.fav .button-bar .refreshButton{
+    display: flex;
+}
+.button-bar .refreshButton:disabled{
+    opacity: 0.7;
+    width: 40%;
+    transform: scale(0.8) translateY(10px);
+}
+.tab-button-group{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    box-shadow: 0px 0px 8px rgba(0,0,0, 0.5);
+    background-color: #333;
+}
+.tab-button-group .tab-button{
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: background-color 0.2s ease-in-out;
+    padding: 16px;
+    box-shadow: 0px 0px 8px rgba(0,0,0, 0.5);
+    padding-bottom: calc(12px + (env(safe-area-inset-bottom) / 2));
+}
+body.fav .tab-button-group .tab-button.fav, body.search .tab-button-group .tab-button.search, body.weather .tab-button-group .tab-button.weather{
+    color: #FFF;
+    background-color: #000;
+}
+
+
+/* style for weather */
+#weather{
+    display: grid;
+    /* 3x3 grid */
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 8px;
+}
+#weather .weather-item{
+    font-size: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    background-color: #333;
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+}
+#weather .weather-item .weather-icon img{
+    width: 50px;
+}
+.weather-update-date{
+    font-size: 0.8rem;
+    color: #999;
+
+}
+
+/*---- Form -----*/
+.search-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.search-form label{
+    font-size: 1rem;
+    color: #999;
+}
+.search-form input, .search-form select{
+    font-size: 1.2rem;
+    padding: 8px;
+}
+
+/*---- Search Result -----*/
+.bus-stop-list{
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+.bus-stop-list>li{
+    list-style: none;
+    padding: 8px 0px 8px 8px;
+    display: flex;
+    border-top: 1px solid rgba(0, 0, 0, 0.8);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    
+}
+.bus-stop-list li .bus-stop-order{
+    width: 30px;
+    display: flex;
+    align-items: center;
+    text-align: center;
+}
+.bus-stop-list li .bus-stop-name{
+    flex-grow: 1;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+}
+.bus-stop-list li .bus-stop-id{
+    font-size: 0.8rem;
+    display: none;
+}
+.bus-stop-list li.selected {
+    background-color: #222;
+}
