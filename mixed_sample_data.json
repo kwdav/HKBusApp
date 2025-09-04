@@ -1,0 +1,374 @@
+{
+  "generated_at": "2025-09-03T21:46:47.928958",
+  "routes": {
+    "CTB_1_I": {
+      "route_number": "1",
+      "company": "CTB",
+      "direction": "inbound",
+      "origin_tc": "中環 (港澳碼頭)",
+      "origin_en": "Central (Macau Ferry)",
+      "dest_tc": "跑馬地 (上)",
+      "dest_en": "Happy Valley (Upper)"
+    },
+    "CTB_1_O": {
+      "route_number": "1",
+      "company": "CTB",
+      "direction": "outbound",
+      "origin_tc": "中環 (港澳碼頭)",
+      "origin_en": "Central (Macau Ferry)",
+      "dest_tc": "跑馬地 (上)",
+      "dest_en": "Happy Valley (Upper)"
+    }
+  },
+  "stops": {
+    "002403": {
+      "name_tc": "跑馬地 (上)",
+      "name_en": "Happy Valley (Upper)",
+      "latitude": 22.264400182091,
+      "longitude": 114.18864188053,
+      "company": "CTB"
+    },
+    "002402": {
+      "name_tc": "箕璉坊, 藍塘道",
+      "name_en": "Green Lane, Blue Pool Road",
+      "latitude": 22.265580672091,
+      "longitude": 114.18873205053,
+      "company": "CTB"
+    },
+    "002492": {
+      "name_tc": "桂芳街, 成和道",
+      "name_en": "Kwai Fong Street, Sing Woo Road",
+      "latitude": 22.266827182091,
+      "longitude": 114.18744416053,
+      "company": "CTB"
+    },
+    "002493": {
+      "name_tc": "山村道, 成和道",
+      "name_en": "Village Road, Sing Woo Road",
+      "latitude": 22.268295142091,
+      "longitude": 114.18647527053,
+      "company": "CTB"
+    },
+    "002453": {
+      "name_tc": "景光街",
+      "name_en": "King Kwong Street",
+      "latitude": 22.268939962091,
+      "longitude": 114.18483901053,
+      "company": "CTB"
+    },
+    "002552": {
+      "name_tc": "養和醫院, 黃泥涌道",
+      "name_en": "Hong Kong Sanatorium and Hospital, Wong Nai Chung Road",
+      "latitude": 22.270151022091,
+      "longitude": 114.18267105053,
+      "company": "CTB"
+    },
+    "002553": {
+      "name_tc": "跑馬地馬場, 黃泥涌道",
+      "name_en": "Happy Valley Racecourse, Wong Nai Chung Road",
+      "latitude": 22.271341142091,
+      "longitude": 114.18075706053,
+      "company": "CTB"
+    },
+    "002467": {
+      "name_tc": "立德里, 摩理臣山道",
+      "name_en": "Lap Tak Lane, Morrison Hill Road",
+      "latitude": 22.276064312091,
+      "longitude": 114.18020849053,
+      "company": "CTB"
+    },
+    "001027": {
+      "name_tc": "中環 (港澳碼頭)",
+      "name_en": "Central (Macau Ferry)",
+      "latitude": 22.288274152091,
+      "longitude": 114.15042248053,
+      "company": "CTB"
+    },
+    "001044": {
+      "name_tc": "林士街, 德輔道中",
+      "name_en": "Rumsey Street, Des Voeux Road Central",
+      "latitude": 22.286050072091,
+      "longitude": 114.15372775053,
+      "company": "CTB"
+    },
+    "001173": {
+      "name_tc": "恒生銀行總行大廈, 德輔道中",
+      "name_en": "Hang Seng Bank Headquarters, Des Voeux Road Central",
+      "latitude": 22.284360062091,
+      "longitude": 114.15596819053,
+      "company": "CTB"
+    },
+    "001049": {
+      "name_tc": "德忌利士街, 德輔道中",
+      "name_en": "Douglas Street, Des Voeux Road Central",
+      "latitude": 22.282866402091,
+      "longitude": 114.15717776053,
+      "company": "CTB"
+    },
+    "001050": {
+      "name_tc": "歷山大廈, 德輔道中",
+      "name_en": "Alexandra House, Des Voeux Road Central",
+      "latitude": 22.281459032091,
+      "longitude": 114.15830013053,
+      "company": "CTB"
+    },
+    "001052": {
+      "name_tc": "遮打花園, 德輔道中",
+      "name_en": "Chater Garden, Des Voeux Road Central",
+      "latitude": 22.280108962091,
+      "longitude": 114.16064635053,
+      "company": "CTB"
+    },
+    "001025": {
+      "name_tc": "皇后像廣場, 遮打道",
+      "name_en": "Statue Square, Chater Road",
+      "latitude": 22.281482342091,
+      "longitude": 114.16005494053,
+      "company": "CTB"
+    },
+    "003845": {
+      "name_tc": "金鐘 - 金鐘廊, 金鐘道",
+      "name_en": "Admiralty - Queensway Plaza, Queensway",
+      "latitude": 22.278485362091,
+      "longitude": 114.16447808053,
+      "company": "CTB"
+    }
+  },
+  "route_stops": {
+    "CTB_1_I": [
+      {
+        "stop_id": "002403",
+        "sequence": 1
+      },
+      {
+        "stop_id": "002402",
+        "sequence": 2
+      },
+      {
+        "stop_id": "002492",
+        "sequence": 3
+      },
+      {
+        "stop_id": "002493",
+        "sequence": 4
+      },
+      {
+        "stop_id": "002453",
+        "sequence": 5
+      },
+      {
+        "stop_id": "002552",
+        "sequence": 6
+      },
+      {
+        "stop_id": "002553",
+        "sequence": 7
+      },
+      {
+        "stop_id": "002467",
+        "sequence": 8
+      }
+    ],
+    "CTB_1_O": [
+      {
+        "stop_id": "001027",
+        "sequence": 1
+      },
+      {
+        "stop_id": "001044",
+        "sequence": 2
+      },
+      {
+        "stop_id": "001173",
+        "sequence": 3
+      },
+      {
+        "stop_id": "001049",
+        "sequence": 4
+      },
+      {
+        "stop_id": "001050",
+        "sequence": 5
+      },
+      {
+        "stop_id": "001052",
+        "sequence": 6
+      },
+      {
+        "stop_id": "001025",
+        "sequence": 7
+      },
+      {
+        "stop_id": "003845",
+        "sequence": 8
+      }
+    ]
+  },
+  "stop_routes": {
+    "002403": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "inbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 1,
+        "route_id": "CTB_1_I"
+      }
+    ],
+    "002402": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "inbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 2,
+        "route_id": "CTB_1_I"
+      }
+    ],
+    "002492": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "inbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 3,
+        "route_id": "CTB_1_I"
+      }
+    ],
+    "002493": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "inbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 4,
+        "route_id": "CTB_1_I"
+      }
+    ],
+    "002453": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "inbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 5,
+        "route_id": "CTB_1_I"
+      }
+    ],
+    "002552": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "inbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 6,
+        "route_id": "CTB_1_I"
+      }
+    ],
+    "002553": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "inbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 7,
+        "route_id": "CTB_1_I"
+      }
+    ],
+    "002467": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "inbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 8,
+        "route_id": "CTB_1_I"
+      }
+    ],
+    "001027": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "outbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 1,
+        "route_id": "CTB_1_O"
+      }
+    ],
+    "001044": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "outbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 2,
+        "route_id": "CTB_1_O"
+      }
+    ],
+    "001173": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "outbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 3,
+        "route_id": "CTB_1_O"
+      }
+    ],
+    "001049": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "outbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 4,
+        "route_id": "CTB_1_O"
+      }
+    ],
+    "001050": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "outbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 5,
+        "route_id": "CTB_1_O"
+      }
+    ],
+    "001052": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "outbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 6,
+        "route_id": "CTB_1_O"
+      }
+    ],
+    "001025": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "outbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 7,
+        "route_id": "CTB_1_O"
+      }
+    ],
+    "003845": [
+      {
+        "route_number": "1",
+        "company": "CTB",
+        "direction": "outbound",
+        "destination": "跑馬地 (上)",
+        "sequence": 8,
+        "route_id": "CTB_1_O"
+      }
+    ]
+  },
+  "summary": {
+    "total_routes": 2,
+    "total_stops": 16,
+    "total_stop_route_mappings": 16
+  }
+}

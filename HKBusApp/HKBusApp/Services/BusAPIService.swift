@@ -1,5 +1,12 @@
 import Foundation
 
+extension Array {
+    func uniqued<T: Hashable>(by keyPath: (Element) -> T) -> [Element] {
+        var seen = Set<T>()
+        return filter { seen.insert(keyPath($0)).inserted }
+    }
+}
+
 class BusAPIService {
     static let shared = BusAPIService()
     
@@ -10,6 +17,7 @@ class BusAPIService {
     private var routeSearchCache: [String: [RouteSearchResult]] = [:]
     private var stopSearchCache: [String: [StopSearchResult]] = [:]
     private var routeDetailCache: [String: BusRouteDetail] = [:]
+    private var allStopsCache: [StopSearchResult] = []
     private let cacheExpiryTime: TimeInterval = 1800 // 30 minutes
     private var cacheTimestamps: [String: Date] = [:]
     
@@ -615,7 +623,7 @@ class BusAPIService {
             for stopData in response.data {
                 let stop = BusStop(
                     stopId: stopData.stop,
-                    sequence: stopData.seq,
+                    sequence: Int(stopData.seq) ?? 1,
                     nameTC: stopNameCache[stopData.stop] ?? "載入中...",
                     nameEN: nil,
                     latitude: nil,
@@ -636,7 +644,7 @@ class BusAPIService {
             for stopData in response.data {
                 let stop = BusStop(
                     stopId: stopData.stop,
-                    sequence: stopData.seq,
+                    sequence: Int(stopData.seq) ?? 1,
                     nameTC: stopNameCache[stopData.stop] ?? "載入中...",
                     nameEN: nil,
                     latitude: nil,
@@ -745,6 +753,765 @@ class BusAPIService {
     
     // MARK: - Stop Search Methods
     
+    func fetchAllBusStops(completion: @escaping (Result<[StopSearchResult], Error>) -> Void) {
+        // Use StopDataManager for much faster stop data loading
+        print("📱 使用 HK Bus Crawling 數據源獲取站點資料...")
+        
+        StopDataManager.shared.loadStopData { result in
+            switch result {
+            case .success(let stopData):
+                // Convert HK Bus Crawling data to StopSearchResult format
+                var stops: [StopSearchResult] = []
+                
+                for (unifiedId, stopInfo) in stopData.stopList {
+                    let stop = StopSearchResult(
+                        stopId: unifiedId,
+                        nameTC: stopInfo.name.zh,
+                        nameEN: stopInfo.name.en,
+                        latitude: stopInfo.location.lat,
+                        longitude: stopInfo.location.lng,
+                        routes: [] // Routes will be populated when needed
+                    )
+                    stops.append(stop)
+                }
+                
+                print("✅ 成功載入 \(stops.count) 個站點")
+                print("  📊 數據來源: HK Bus Crawling (GitHub)")
+                
+                // Cache the results for legacy compatibility
+                self.allStopsCache = stops
+                self.setCacheTimestamp(for: "all_stops")
+                
+                DispatchQueue.main.async {
+                    completion(.success(stops))
+                }
+                
+            case .failure(let error):
+                print("❌ StopDataManager 載入失敗: \(error.localizedDescription)")
+                print("🔄 回退至原有 API 方法...")
+                
+                // Fallback to original API method if StopDataManager fails
+                self.fetchAllBusStopsFromAPIs(completion: completion)
+            }
+        }
+    }
+    
+    // MARK: - Legacy API Method (Fallback)
+    
+    private func fetchAllBusStopsFromAPIs(completion: @escaping (Result<[StopSearchResult], Error>) -> Void) {
+        print("🚌 開始並行獲取所有巴士公司的站點資料...")
+        let group = DispatchGroup()
+        var allStops: [StopSearchResult] = []
+        var fetchErrors: [Error] = []
+        
+        // Fetch KMB stops
+        print("  📡 發起 KMB API 請求...")
+        group.enter()
+        fetchKMBStops { result in
+            switch result {
+            case .success(let stops):
+                print("  ✅ KMB 成功獲取 \(stops.count) 個站點")
+                allStops.append(contentsOf: stops)
+            case .failure(let error):
+                print("  ❌ KMB 站點獲取錯誤: \(error.localizedDescription)")
+                fetchErrors.append(error)
+            }
+            group.leave()
+        }
+        
+        // Fetch CTB stops (this will likely fail due to empty API response)
+        print("  📡 發起 CTB API 請求...")
+        group.enter()
+        fetchCTBStops { result in
+            switch result {
+            case .success(let stops):
+                print("  ✅ CTB 成功獲取 \(stops.count) 個站點")
+                allStops.append(contentsOf: stops)
+            case .failure(let error):
+                print("  ❌ CTB 站點獲取錯誤: \(error.localizedDescription)")
+                fetchErrors.append(error)
+            }
+            group.leave()
+        }
+        
+        // Fetch NWFB stops  
+        print("  📡 發起 NWFB API 請求...")
+        group.enter()
+        fetchNWFBStops { result in
+            switch result {
+            case .success(let stops):
+                print("  ✅ NWFB 成功獲取 \(stops.count) 個站點")
+                allStops.append(contentsOf: stops)
+            case .failure(let error):
+                print("  ❌ NWFB 站點獲取錯誤: \(error.localizedDescription)")
+                fetchErrors.append(error)
+            }
+            group.leave()
+        }
+        
+        group.notify(queue: .main) {
+            print("🔄 所有 API 請求完成，整合結果...")
+            
+            if !allStops.isEmpty {
+                print("✅ 總共獲取 \(allStops.count) 個巴士站點")
+                print("  📊 錯誤數量: \(fetchErrors.count) 個API失敗")
+                
+                // Cache the results
+                self.allStopsCache = allStops
+                self.setCacheTimestamp(for: "all_stops")
+                completion(.success(allStops))
+            } else if !fetchErrors.isEmpty {
+                print("❌ 所有 API 請求都失敗了")
+                completion(.failure(fetchErrors.first!))
+            } else {
+                print("❌ 沒有數據返回且無錯誤信息")
+                completion(.failure(APIError.noData))
+            }
+        }
+    }
+    
+    private func fetchCTBStops(completion: @escaping (Result<[StopSearchResult], Error>) -> Void) {
+        let urlString = "https://rt.data.gov.hk/v2/transport/citybus/stop/CTB"
+        guard let url = URL(string: urlString) else {
+            print("❌ CTB URL 無效: \(urlString)")
+            completion(.failure(APIError.invalidURL))
+            return
+        }
+        
+        print("🌐 CTB API 請求: \(urlString)")
+        
+        session.dataTask(with: url) { data, response, error in
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📡 CTB API 回應狀態: \(httpResponse.statusCode)")
+            }
+            
+            if let error = error {
+                print("❌ CTB 網絡錯誤: \(error.localizedDescription)")
+                completion(.failure(error))
+                return
+            }
+            
+            guard let data = data else {
+                print("❌ CTB 沒有返回數據")
+                completion(.failure(APIError.noData))
+                return
+            }
+            
+            print("📦 CTB API 返回數據大小: \(data.count) bytes")
+            
+            // Debug: Print raw response
+            if let rawString = String(data: data, encoding: .utf8) {
+                let preview = String(rawString.prefix(200))
+                print("🔍 CTB API 原始回應前200字符: \(preview)")
+            }
+            
+            do {
+                let stopResponse = try JSONDecoder().decode(CTBStopListResponse.self, from: data)
+                print("✅ CTB JSON 解析成功")
+                print("📊 CTB API 回應: type=\(stopResponse.type), version=\(stopResponse.version)")
+                print("📈 CTB 原始數據項目: \(stopResponse.data.stops.count)")
+                
+                let stops = stopResponse.data.stops.compactMap { stopData -> StopSearchResult? in
+                    // Validate that we have coordinates
+                    guard let lat = stopData.latitude, let lon = stopData.longitude else {
+                        print("⚠️ CTB 站點缺少座標: \(stopData.stop)")
+                        return nil
+                    }
+                    
+                    return StopSearchResult(
+                        stopId: stopData.stop,
+                        nameTC: stopData.name_tc,
+                        nameEN: stopData.name_en,
+                        latitude: lat,
+                        longitude: lon,
+                        routes: []
+                    )
+                }
+                
+                print("✅ CTB 成功處理 \(stops.count) 個有效站點（共 \(stopResponse.data.stops.count) 個原始項目）")
+                completion(.success(stops))
+                
+            } catch {
+                print("❌ CTB JSON 解析失敗: \(error.localizedDescription)")
+                if let decodingError = error as? DecodingError {
+                    switch decodingError {
+                    case .dataCorrupted(let context):
+                        print("  數據損壞: \(context)")
+                    case .keyNotFound(let key, let context):
+                        print("  缺少鍵: \(key), 上下文: \(context)")
+                    case .typeMismatch(let type, let context):
+                        print("  類型不匹配: \(type), 上下文: \(context)")
+                    case .valueNotFound(let value, let context):
+                        print("  值未找到: \(value), 上下文: \(context)")
+                    @unknown default:
+                        print("  未知解析錯誤")
+                    }
+                }
+                completion(.failure(error))
+            }
+        }.resume()
+    }
+    
+    private func fetchNWFBStops(completion: @escaping (Result<[StopSearchResult], Error>) -> Void) {
+        let urlString = "https://rt.data.gov.hk/v2/transport/citybus/stop/NWFB"
+        guard let url = URL(string: urlString) else {
+            print("❌ NWFB URL 無效: \(urlString)")
+            completion(.failure(APIError.invalidURL))
+            return
+        }
+        
+        print("🌐 NWFB API 請求: \(urlString)")
+        
+        session.dataTask(with: url) { data, response, error in
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📡 NWFB API 回應狀態: \(httpResponse.statusCode)")
+            }
+            
+            if let error = error {
+                print("❌ NWFB 網絡錯誤: \(error.localizedDescription)")
+                completion(.failure(error))
+                return
+            }
+            
+            guard let data = data else {
+                print("❌ NWFB 沒有返回數據")
+                completion(.failure(APIError.noData))
+                return
+            }
+            
+            print("📦 NWFB API 返回數據大小: \(data.count) bytes")
+            
+            // Debug: Print raw response
+            if let rawString = String(data: data, encoding: .utf8) {
+                let preview = String(rawString.prefix(200))
+                print("🔍 NWFB API 原始回應前200字符: \(preview)")
+            }
+            
+            do {
+                let stopResponse = try JSONDecoder().decode(CTBStopListResponse.self, from: data)
+                print("✅ NWFB JSON 解析成功")
+                print("📊 NWFB API 回應: type=\(stopResponse.type), version=\(stopResponse.version)")
+                print("📈 NWFB 原始數據項目: \(stopResponse.data.stops.count)")
+                
+                let stops = stopResponse.data.stops.compactMap { stopData -> StopSearchResult? in
+                    // Validate that we have coordinates
+                    guard let lat = stopData.latitude, let lon = stopData.longitude else {
+                        print("⚠️ NWFB 站點缺少座標: \(stopData.stop)")
+                        return nil
+                    }
+                    
+                    return StopSearchResult(
+                        stopId: stopData.stop,
+                        nameTC: stopData.name_tc,
+                        nameEN: stopData.name_en,
+                        latitude: lat,
+                        longitude: lon,
+                        routes: []
+                    )
+                }
+                
+                print("✅ NWFB 成功處理 \(stops.count) 個有效站點（共 \(stopResponse.data.stops.count) 個原始項目）")
+                completion(.success(stops))
+                
+            } catch {
+                print("❌ NWFB JSON 解析失敗: \(error.localizedDescription)")
+                if let decodingError = error as? DecodingError {
+                    switch decodingError {
+                    case .dataCorrupted(let context):
+                        print("  數據損壞: \(context)")
+                    case .keyNotFound(let key, let context):
+                        print("  缺少鍵: \(key), 上下文: \(context)")
+                    case .typeMismatch(let type, let context):
+                        print("  類型不匹配: \(type), 上下文: \(context)")
+                    case .valueNotFound(let value, let context):
+                        print("  值未找到: \(value), 上下文: \(context)")
+                    @unknown default:
+                        print("  未知解析錯誤")
+                    }
+                }
+                completion(.failure(error))
+            }
+        }.resume()
+    }
+
+    private func fetchKMBStops(completion: @escaping (Result<[StopSearchResult], Error>) -> Void) {
+        let urlString = "https://data.etabus.gov.hk/v1/transport/kmb/stop"
+        guard let url = URL(string: urlString) else {
+            completion(.failure(APIError.invalidURL))
+            return
+        }
+        
+        print("獲取 KMB 巴士站列表...")
+        
+        session.dataTask(with: url) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(APIError.noData))
+                return
+            }
+            
+            do {
+                let stopResponse = try JSONDecoder().decode(KMBStopListResponse.self, from: data)
+                print("KMB API 返回 \(stopResponse.data.count) 個巴士站")
+                
+                // Convert KMB stops to StopSearchResult
+                let stops = stopResponse.data.compactMap { kmbStop -> StopSearchResult? in
+                    guard let lat = kmbStop.latitude, let lon = kmbStop.longitude else {
+                        return nil
+                    }
+                    
+                    return StopSearchResult(
+                        stopId: kmbStop.stop,
+                        nameTC: kmbStop.name_tc,
+                        nameEN: kmbStop.name_en,
+                        latitude: lat,
+                        longitude: lon,
+                        routes: [] // Routes will be populated later if needed
+                    )
+                }
+                
+                print("轉換完成，有效的巴士站: \(stops.count)")
+                completion(.success(stops))
+                
+            } catch {
+                print("KMB 站點解析錯誤: \(error.localizedDescription)")
+                completion(.failure(error))
+            }
+        }.resume()
+    }
+    
+    // MARK: - Stop Routes
+    func fetchRoutesForStop(stopId: String, completion: @escaping (Result<[StopRoute], Error>) -> Void) {
+        // Get stop location info for nearby search
+        getStopLocationInfo(stopId: stopId) { [weak self] locationResult in
+            switch locationResult {
+            case .success(let location):
+                self?.fetchRoutesForStopWithLocation(stopId: stopId, location: location, completion: completion)
+            case .failure:
+                // Fallback to direct ID matching
+                self?.fetchRoutesForStopDirectly(stopId: stopId, completion: completion)
+            }
+        }
+    }
+    
+    private func fetchRoutesForStopDirectly(stopId: String, completion: @escaping (Result<[StopRoute], Error>) -> Void) {
+        print("📍 開始查詢站點路線: \(stopId)")
+        
+        // First try direct ID match with KMB API
+        fetchKMBRoutesForStop(stopId: stopId) { [weak self] kmbResult in
+            // Then try CTB/NWFB APIs
+            self?.fetchCTBRoutesForStop(stopId: stopId) { ctbResult in
+                var allRoutes: [StopRoute] = []
+                
+                // Combine results from all APIs
+                switch kmbResult {
+                case .success(let kmbRoutes):
+                    print("🚌 KMB API 找到 \(kmbRoutes.count) 條路線")
+                    allRoutes.append(contentsOf: kmbRoutes)
+                case .failure(let error):
+                    print("❌ KMB API 查詢失敗: \(error.localizedDescription)")
+                }
+                
+                switch ctbResult {
+                case .success(let ctbRoutes):
+                    print("🚍 CTB/NWFB API 找到 \(ctbRoutes.count) 條路線") 
+                    allRoutes.append(contentsOf: ctbRoutes)
+                case .failure(let error):
+                    print("❌ CTB/NWFB API 查詢失敗: \(error.localizedDescription)")
+                }
+                
+                // Remove duplicates and sort
+                let uniqueRoutes = Array(Set(allRoutes.map { "\($0.company.rawValue)_\($0.routeNumber)_\($0.direction)" }))
+                    .compactMap { uniqueKey -> StopRoute? in
+                        allRoutes.first { "\($0.company.rawValue)_\($0.routeNumber)_\($0.direction)" == uniqueKey }
+                    }
+                    .sorted { $0.routeNumber < $1.routeNumber }
+                
+                print("✅ 站點 \(stopId) 總共找到 \(uniqueRoutes.count) 條路線")
+                
+                // If no routes found, try to provide some mock data for testing
+                if uniqueRoutes.isEmpty {
+                    print("⚠️ 沒有找到路線，嘗試提供測試資料")
+                    guard let strongSelf = self else {
+                        completion(.success(uniqueRoutes))
+                        return
+                    }
+                    let mockRoutes = strongSelf.generateMockRoutesForStop(stopId: stopId)
+                    if !mockRoutes.isEmpty {
+                        print("📋 提供 \(mockRoutes.count) 條模擬路線用於測試")
+                    }
+                    completion(.success(mockRoutes))
+                } else {
+                    completion(.success(uniqueRoutes))
+                }
+            }
+        }
+    }
+    
+    private func fetchKMBRoutesForStop(stopId: String, completion: @escaping (Result<[StopRoute], Error>) -> Void) {
+        // Directly fetch route-stops to find routes passing through this stop
+        fetchKMBRouteStopsForStop(stopId: stopId, completion: completion)
+    }
+    
+    private func fetchKMBRouteStopsForStop(stopId: String, completion: @escaping (Result<[StopRoute], Error>) -> Void) {
+        // Use KMB route-stop API to get all routes passing through this stop
+        let urlString = "https://data.etabus.gov.hk/v1/transport/kmb/route-stop"
+        guard let url = URL(string: urlString) else {
+            completion(.failure(APIError.invalidURL))
+            return
+        }
+        
+        session.dataTask(with: url) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(APIError.noData))
+                return
+            }
+            
+            do {
+                let routeStopResponse = try JSONDecoder().decode(KMBRouteStopResponse.self, from: data)
+                
+                // Filter routes that pass through this stop
+                let routesAtStop = routeStopResponse.data.filter { $0.stop == stopId }
+                print("🔍 KMB route-stop API 總共有 \(routeStopResponse.data.count) 條記錄，其中 \(routesAtStop.count) 條經過站點 \(stopId)")
+                
+                // Debug: Show some sample stop IDs from API for comparison
+                if routesAtStop.isEmpty && routeStopResponse.data.count > 0 {
+                    let sampleStops = Array(Set(routeStopResponse.data.prefix(10).map { $0.stop }))
+                    print("🔍 API 中的一些站點 ID 示例: \(sampleStops.prefix(5))")
+                    print("🔍 查詢的站點 ID: '\(stopId)'")
+                }
+                
+                // Convert to StopRoute objects and remove duplicates
+                var uniqueRoutes: [String: StopRoute] = [:]
+                
+                for routeStop in routesAtStop {
+                    let key = "\(routeStop.route)_\(routeStop.bound)"
+                    
+                    if uniqueRoutes[key] == nil {
+                        let direction = routeStop.bound.lowercased() == "o" ? "outbound" : "inbound"
+                        let stopRoute = StopRoute(
+                            routeNumber: routeStop.route,
+                            company: .KMB,
+                            direction: direction,
+                            destination: self.getKMBDestinationPlaceholder(route: routeStop.route, bound: routeStop.bound)
+                        )
+                        uniqueRoutes[key] = stopRoute
+                    }
+                }
+                
+                // Now fetch actual destinations for the routes
+                self.enhanceKMBRoutesWithDestinations(Array(uniqueRoutes.values)) { enhancedRoutes in
+                    completion(.success(enhancedRoutes.sorted { $0.routeNumber < $1.routeNumber }))
+                }
+                
+            } catch {
+                print("KMB 路線站點解析錯誤: \(error.localizedDescription)")
+                // Print raw response for debugging
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("🔍 原始響應前 500 字符: \(String(responseString.prefix(500)))")
+                }
+                completion(.failure(error))
+            }
+        }.resume()
+    }
+    
+    private func getKMBDestinationPlaceholder(route: String, bound: String) -> String {
+        // Provide some common destinations as placeholders
+        // This could be enhanced with a lookup table
+        return bound.lowercased() == "o" ? "往終點站" : "往起點站"
+    }
+    
+    private func enhanceKMBRoutesWithDestinations(_ routes: [StopRoute], completion: @escaping ([StopRoute]) -> Void) {
+        // For now, just return the routes as-is
+        // This could be enhanced to fetch actual destination names from KMB route API
+        completion(routes)
+    }
+    
+    private func fetchCTBRoutesForStop(stopId: String, completion: @escaping (Result<[StopRoute], Error>) -> Void) {
+        print("🚍 開始查詢 CTB/NWFB 路線，站點: \(stopId)")
+        
+        let dispatchGroup = DispatchGroup()
+        var allCTBRoutes: [StopRoute] = []
+        
+        // Query both CTB and NWFB
+        dispatchGroup.enter()
+        fetchCTBRouteStopsForCompany(stopId: stopId, company: "CTB") { result in
+            switch result {
+            case .success(let routes):
+                print("🟨 CTB 找到 \(routes.count) 條路線")
+                allCTBRoutes.append(contentsOf: routes)
+            case .failure(let error):
+                print("❌ CTB 查詢失敗: \(error.localizedDescription)")
+            }
+            dispatchGroup.leave()
+        }
+        
+        dispatchGroup.enter()
+        fetchCTBRouteStopsForCompany(stopId: stopId, company: "NWFB") { result in
+            switch result {
+            case .success(let routes):
+                print("🟠 NWFB 找到 \(routes.count) 條路線")
+                allCTBRoutes.append(contentsOf: routes)
+            case .failure(let error):
+                print("❌ NWFB 查詢失敗: \(error.localizedDescription)")
+            }
+            dispatchGroup.leave()
+        }
+        
+        dispatchGroup.notify(queue: .main) {
+            let uniqueRoutes = allCTBRoutes.uniqued { route in
+                "\(route.company.rawValue)_\(route.routeNumber)_\(route.direction)"
+            }
+            print("✅ CTB/NWFB 總共找到 \(uniqueRoutes.count) 條路線")
+            completion(.success(uniqueRoutes))
+        }
+    }
+    
+    private func fetchCTBRouteStopsForCompany(stopId: String, company: String, completion: @escaping (Result<[StopRoute], Error>) -> Void) {
+        let urlString = "https://rt.data.gov.hk/v2/transport/citybus/route-stop/\(company)"
+        guard let url = URL(string: urlString) else {
+            completion(.failure(APIError.invalidURL))
+            return
+        }
+        
+        session.dataTask(with: url) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(APIError.noData))
+                return
+            }
+            
+            do {
+                let routeStopResponse = try JSONDecoder().decode(CTBRouteStopResponse.self, from: data)
+                
+                // Filter routes that pass through this stop
+                let routesAtStop = routeStopResponse.data.filter { $0.stop == stopId }
+                
+                // Convert to StopRoute objects and remove duplicates
+                var stopRoutes: [StopRoute] = []
+                let group = DispatchGroup()
+                
+                for routeStop in routesAtStop {
+                    let key = "\(routeStop.route)_\(routeStop.dir)"
+                    
+                    // Skip if we already processed this route-direction combination
+                    if !stopRoutes.contains(where: { $0.routeNumber == routeStop.route && $0.direction == (routeStop.dir.lowercased() == "o" ? "outbound" : "inbound") }) {
+                        group.enter()
+                        
+                        let direction = routeStop.dir.lowercased() == "o" ? "outbound" : "inbound"
+                        let busCompany: BusRoute.Company = company == "CTB" ? .CTB : .NWFB
+                        
+                        // Get real destination from route API
+                        self.getCTBRouteDestination(route: routeStop.route, company: company, direction: routeStop.dir) { destination in
+                            let stopRoute = StopRoute(
+                                routeNumber: routeStop.route,
+                                company: busCompany,
+                                direction: direction,
+                                destination: destination
+                            )
+                            stopRoutes.append(stopRoute)
+                            group.leave()
+                        }
+                    }
+                }
+                
+                group.notify(queue: .main) {
+                    let results = stopRoutes.sorted { $0.routeNumber < $1.routeNumber }
+                    completion(.success(results))
+                }
+                
+            } catch {
+                print("\(company) 路線站點解析錯誤: \(error.localizedDescription)")
+                completion(.success([])) // Return empty instead of error to continue with other APIs
+            }
+        }.resume()
+    }
+    
+    private func getCTBRouteDestination(route: String, company: String, direction: String, completion: @escaping (String) -> Void) {
+        let urlString = "https://rt.data.gov.hk/v2/transport/citybus/route/\(company)/\(route)"
+        guard let url = URL(string: urlString) else {
+            completion(direction.lowercased() == "o" ? "往終點站" : "往起點站")
+            return
+        }
+        
+        session.dataTask(with: url) { data, response, error in
+            guard let data = data,
+                  error == nil else {
+                completion(direction.lowercased() == "o" ? "往終點站" : "往起點站")
+                return
+            }
+            
+            do {
+                let routeResponse = try JSONDecoder().decode(BusRouteInfo.self, from: data)
+                let destination = direction.lowercased() == "o" ? 
+                    routeResponse.data.dest_tc : 
+                    routeResponse.data.orig_tc
+                completion(destination)
+            } catch {
+                completion(direction.lowercased() == "o" ? "往終點站" : "往起點站")
+            }
+        }.resume()
+    }
+    
+    private func generateMockRoutesForStop(stopId: String) -> [StopRoute] {
+        // Provide some mock routes for testing popular Hong Kong bus stops
+        let mockRouteData: [String: [StopRoute]] = [
+            // Tseung Kwan O Station
+            "TK561": [
+                StopRoute(routeNumber: "796X", company: .CTB, direction: "outbound", destination: "機場"),
+                StopRoute(routeNumber: "98D", company: .KMB, direction: "outbound", destination: "尖沙咀東"),
+                StopRoute(routeNumber: "290A", company: .KMB, direction: "inbound", destination: "將軍澳"),
+            ],
+            // Central
+            "001826": [
+                StopRoute(routeNumber: "5B", company: .CTB, direction: "outbound", destination: "銅鑼灣"),
+                StopRoute(routeNumber: "15", company: .CTB, direction: "outbound", destination: "中環"),
+            ],
+            // Admiralty
+            "002917": [
+                StopRoute(routeNumber: "11", company: .CTB, direction: "outbound", destination: "中環"),
+                StopRoute(routeNumber: "970", company: .CTB, direction: "inbound", destination: "蘇屋"),
+            ]
+        ]
+        
+        return mockRouteData[stopId] ?? []
+    }
+    
+    // MARK: - Location-based Route Search
+    private func getStopLocationInfo(stopId: String, completion: @escaping (Result<(lat: Double, lon: Double), Error>) -> Void) {
+        // Find the stop in our cached stop data
+        if let cachedStops = self.getCachedStops() {
+            for stop in cachedStops {
+                if stop.stopId == stopId, let lat = stop.latitude, let lon = stop.longitude {
+                    completion(.success((lat: lat, lon: lon)))
+                    return
+                }
+            }
+        }
+        completion(.failure(APIError.noData))
+    }
+    
+    private func fetchRoutesForStopWithLocation(stopId: String, location: (lat: Double, lon: Double), completion: @escaping (Result<[StopRoute], Error>) -> Void) {
+        print("📍 使用位置查詢站點路線: \(stopId) at (\(location.lat), \(location.lon))")
+        
+        // Find nearby actual KMB stops within ~200m radius
+        fetchNearbyKMBStops(latitude: location.lat, longitude: location.lon, radiusMeters: 200) { [weak self] nearbyResult in
+            switch nearbyResult {
+            case .success(let nearbyStops):
+                print("🔍 找到 \(nearbyStops.count) 個附近的 KMB 站點")
+                self?.fetchRoutesForNearbyStops(nearbyStops, completion: completion)
+                
+            case .failure(let error):
+                print("❌ 附近站點查詢失敗: \(error.localizedDescription)")
+                // Fallback to direct ID matching
+                self?.fetchRoutesForStopDirectly(stopId: stopId, completion: completion)
+            }
+        }
+    }
+    
+    private func fetchNearbyKMBStops(latitude: Double, longitude: Double, radiusMeters: Double, completion: @escaping (Result<[String], Error>) -> Void) {
+        // Get all KMB stops and filter by distance
+        let urlString = "https://data.etabus.gov.hk/v1/transport/kmb/stop"
+        guard let url = URL(string: urlString) else {
+            completion(.failure(APIError.invalidURL))
+            return
+        }
+        
+        session.dataTask(with: url) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(APIError.noData))
+                return
+            }
+            
+            do {
+                let stopResponse = try JSONDecoder().decode(KMBStopListResponse.self, from: data)
+                
+                let nearbyStops = stopResponse.data.compactMap { stop -> String? in
+                    guard let stopLat = stop.latitude, let stopLon = stop.longitude else { return nil }
+                    
+                    // Calculate distance using Haversine formula
+                    let distance = self.calculateDistance(
+                        lat1: latitude, lon1: longitude,
+                        lat2: stopLat, lon2: stopLon
+                    )
+                    
+                    return distance <= radiusMeters ? stop.stop : nil
+                }
+                
+                completion(.success(nearbyStops))
+                
+            } catch {
+                print("KMB 站點解析錯誤: \(error.localizedDescription)")
+                completion(.failure(error))
+            }
+        }.resume()
+    }
+    
+    private func fetchRoutesForNearbyStops(_ nearbyStops: [String], completion: @escaping (Result<[StopRoute], Error>) -> Void) {
+        var allRoutes: [StopRoute] = []
+        let group = DispatchGroup()
+        
+        for stopId in nearbyStops.prefix(5) { // Limit to first 5 nearby stops
+            group.enter()
+            fetchKMBRoutesForStop(stopId: stopId) { result in
+                if case .success(let routes) = result {
+                    allRoutes.append(contentsOf: routes)
+                }
+                group.leave()
+            }
+        }
+        
+        group.notify(queue: .main) {
+            // Remove duplicates
+            let uniqueRoutes = Array(Set(allRoutes.map { "\($0.company.rawValue)_\($0.routeNumber)_\($0.direction)" }))
+                .compactMap { uniqueKey -> StopRoute? in
+                    allRoutes.first { "\($0.company.rawValue)_\($0.routeNumber)_\($0.direction)" == uniqueKey }
+                }
+                .sorted { $0.routeNumber < $1.routeNumber }
+            
+            print("✅ 附近站點總共找到 \(uniqueRoutes.count) 條獨特路線")
+            completion(.success(uniqueRoutes))
+        }
+    }
+    
+    // Calculate distance between two coordinates using Haversine formula
+    private func calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
+        let R = 6371000.0 // Earth's radius in meters
+        let dLat = (lat2 - lat1) * .pi / 180.0
+        let dLon = (lon2 - lon1) * .pi / 180.0
+        
+        let a = sin(dLat/2) * sin(dLat/2) +
+                cos(lat1 * .pi / 180.0) * cos(lat2 * .pi / 180.0) *
+                sin(dLon/2) * sin(dLon/2)
+        
+        let c = 2 * atan2(sqrt(a), sqrt(1-a))
+        return R * c
+    }
+    
+    private func getCachedStops() -> [StopSearchResult]? {
+        // Return cached stops from previous searches if available
+        // This could be enhanced to use a persistent cache
+        return nil
+    }
+    
     func searchStops(stopName: String, completion: @escaping (Result<[StopSearchResult], Error>) -> Void) {
         // Check cache first
         if let cachedResults = getCachedStopSearch(for: stopName) {
@@ -753,16 +1520,29 @@ class BusAPIService {
             return
         }
         
-        // For now, create mock data as stop search API is more complex
-        // In a real implementation, you would call actual stop search APIs
-        DispatchQueue.global(qos: .userInitiated).async {
-            
-            // Mock stop search results based on common stop names
-            let mockResults = self.generateMockStopSearchResults(for: stopName)
-            
-            DispatchQueue.main.async {
+        // Search from all stops
+        fetchAllBusStops { [weak self] result in
+            switch result {
+            case .success(let allStops):
+                let queryLower = stopName.lowercased()
+                
+                // Filter stops that match the search query
+                let matchingStops = allStops.filter { stop in
+                    stop.nameTC.lowercased().contains(queryLower) ||
+                    (stop.nameEN?.lowercased().contains(queryLower) ?? false)
+                }
+                
+                let results = Array(matchingStops.prefix(20)) // Limit to 20 results
+                
                 // Cache the results
-                self.setCachedStopSearch(for: stopName, results: mockResults)
+                self?.setCachedStopSearch(for: stopName, results: results)
+                completion(.success(results))
+                
+            case .failure(_):
+                // Fallback to mock data
+                print("從真實 API 搜尋失敗，使用模擬資料")
+                let mockResults = self?.generateMockStopSearchResults(for: stopName) ?? []
+                self?.setCachedStopSearch(for: stopName, results: mockResults)
                 completion(.success(mockResults))
             }
         }

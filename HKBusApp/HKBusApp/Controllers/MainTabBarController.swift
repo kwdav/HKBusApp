@@ -43,7 +43,7 @@ class MainTabBarController: UITabBarController {
         
         let stopSearchVC = StopSearchViewController()
         stopSearchVC.tabBarItem = UITabBarItem(
-            title: "站點搜尋",
+            title: "站點",
             image: UIImage(systemName: "location"),
             selectedImage: UIImage(systemName: "location.fill")
         )

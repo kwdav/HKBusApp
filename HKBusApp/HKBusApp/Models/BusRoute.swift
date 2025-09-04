@@ -67,7 +67,7 @@ struct DirectionInfo: Codable, Hashable {
 
 // MARK: - Stop Search Models
 
-struct StopSearchResult {
+struct StopSearchResult: Codable {
     let stopId: String
     let nameTC: String
     let nameEN: String?
@@ -89,7 +89,7 @@ struct StopSearchResult {
     }
 }
 
-struct StopRoute {
+struct StopRoute: Codable {
     let routeNumber: String
     let company: BusRoute.Company
     let direction: String

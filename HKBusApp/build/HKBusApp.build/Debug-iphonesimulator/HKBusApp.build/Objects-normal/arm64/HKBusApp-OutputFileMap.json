@@ -1,0 +1,228 @@
+{
+  "" : {
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp-master.dia",
+    "emit-module-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp-master-emit-module.dia",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp-master.swiftdeps"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/AppDelegate.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/AppDelegate.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/AppDelegate.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/AppDelegate.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/AppDelegate.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/AppDelegate.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/AppDelegate.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/AppDelegate.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/AppDelegate~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Controllers/BusListViewController.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusListViewController.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusListViewController.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusListViewController.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusListViewController.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusListViewController.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusListViewController.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusListViewController.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusListViewController~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Controllers/MainTabBarController.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/MainTabBarController.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/MainTabBarController.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/MainTabBarController.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/MainTabBarController.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/MainTabBarController.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/MainTabBarController.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/MainTabBarController.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/MainTabBarController~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Controllers/RouteDetailViewController.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteDetailViewController.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteDetailViewController.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteDetailViewController.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteDetailViewController.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteDetailViewController.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteDetailViewController.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteDetailViewController.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteDetailViewController~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Controllers/SearchViewController.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchViewController.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchViewController.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchViewController.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchViewController.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchViewController.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchViewController.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchViewController.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchViewController~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Controllers/StopETAViewController.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopETAViewController.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopETAViewController.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopETAViewController.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopETAViewController.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopETAViewController.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopETAViewController.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopETAViewController.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopETAViewController~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Controllers/StopRoutesViewController.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopRoutesViewController.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopRoutesViewController.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopRoutesViewController.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopRoutesViewController.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopRoutesViewController.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopRoutesViewController.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopRoutesViewController.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopRoutesViewController~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Controllers/StopSearchViewController.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchViewController.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchViewController.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchViewController.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchViewController.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchViewController.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchViewController.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchViewController.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchViewController~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Models/BusETA.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETA.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETA.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETA.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETA.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETA.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETA.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETA.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETA~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Models/BusRoute.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRoute.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRoute.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRoute.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRoute.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRoute.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRoute.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRoute.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRoute~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/SceneDelegate.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SceneDelegate.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SceneDelegate.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SceneDelegate.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SceneDelegate.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SceneDelegate.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SceneDelegate.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SceneDelegate.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SceneDelegate~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Services/BusAPIService.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusAPIService.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusAPIService.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusAPIService.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusAPIService.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusAPIService.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusAPIService.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusAPIService.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusAPIService~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Services/CoreDataStack.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/CoreDataStack.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/CoreDataStack.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/CoreDataStack.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/CoreDataStack.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/CoreDataStack.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/CoreDataStack.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/CoreDataStack.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/CoreDataStack~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Services/FavoritesManager.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/FavoritesManager.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/FavoritesManager.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/FavoritesManager.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/FavoritesManager.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/FavoritesManager.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/FavoritesManager.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/FavoritesManager.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/FavoritesManager~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Views/BusETATableViewCell.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETATableViewCell.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETATableViewCell.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETATableViewCell.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETATableViewCell.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETATableViewCell.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETATableViewCell.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETATableViewCell.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusETATableViewCell~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Views/RouteStopTableViewCell.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteStopTableViewCell.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteStopTableViewCell.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteStopTableViewCell.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteStopTableViewCell.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteStopTableViewCell.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteStopTableViewCell.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteStopTableViewCell.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/RouteStopTableViewCell~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Views/SearchResultTableViewCell.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchResultTableViewCell.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchResultTableViewCell.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchResultTableViewCell.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchResultTableViewCell.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchResultTableViewCell.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchResultTableViewCell.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchResultTableViewCell.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/SearchResultTableViewCell~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/HKBusApp/Views/StopSearchResultTableViewCell.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchResultTableViewCell.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchResultTableViewCell.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchResultTableViewCell.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchResultTableViewCell.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchResultTableViewCell.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchResultTableViewCell.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchResultTableViewCell.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/StopSearchResultTableViewCell~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/DerivedSources/CoreDataGenerated/HKBusApp/BusRouteFavorite+CoreDataClass.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataClass.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataClass.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataClass.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataClass.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataClass.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataClass.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataClass.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataClass~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/DerivedSources/CoreDataGenerated/HKBusApp/BusRouteFavorite+CoreDataProperties.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataProperties.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataProperties.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataProperties.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataProperties.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataProperties.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataProperties.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataProperties.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/BusRouteFavorite+CoreDataProperties~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/DerivedSources/CoreDataGenerated/HKBusApp/HKBusApp+CoreDataModel.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp+CoreDataModel.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp+CoreDataModel.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp+CoreDataModel.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp+CoreDataModel.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp+CoreDataModel.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp+CoreDataModel.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp+CoreDataModel.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/HKBusApp+CoreDataModel~partial.swiftmodule"
+  },
+  "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/davidwong/Documents/App Development/busApp/HKBusApp/build/HKBusApp.build/Debug-iphonesimulator/HKBusApp.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}

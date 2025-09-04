@@ -136,6 +136,9 @@ struct CTBRouteStopData: Codable {
 }
 
 struct KMBRouteStopResponse: Codable {
+    let type: String
+    let version: String
+    let generated_timestamp: String
     let data: [KMBRouteStopData]
 }
 
@@ -143,6 +146,83 @@ struct KMBRouteStopData: Codable {
     let route: String
     let bound: String
     let service_type: String
-    let seq: Int
+    let seq: String
     let stop: String
+}
+
+// MARK: - Stop List API Models
+
+struct KMBStopListResponse: Codable {
+    let type: String
+    let version: String
+    let generated_timestamp: String
+    let data: [KMBStopData]
+}
+
+struct KMBStopData: Codable {
+    let stop: String
+    let name_en: String
+    let name_tc: String
+    let name_sc: String
+    let lat: String
+    let long: String
+    
+    var latitude: Double? {
+        return Double(lat)
+    }
+    
+    var longitude: Double? {
+        return Double(long)
+    }
+}
+
+struct CTBStopListResponse: Codable {
+    let type: String
+    let version: String
+    let generated_timestamp: String
+    let data: CTBStopListData
+}
+
+// Handle both array and object responses
+enum CTBStopListData: Codable {
+    case array([CTBStopData])
+    case object([String: CTBStopData])  // In case data comes as object
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        
+        if let array = try? container.decode([CTBStopData].self) {
+            self = .array(array)
+        } else if let object = try? container.decode([String: CTBStopData].self) {
+            self = .object(object)
+        } else {
+            // Handle empty object case {}
+            self = .array([])
+        }
+    }
+    
+    var stops: [CTBStopData] {
+        switch self {
+        case .array(let stops):
+            return stops
+        case .object(let dict):
+            return Array(dict.values)
+        }
+    }
+}
+
+struct CTBStopData: Codable {
+    let stop: String
+    let name_en: String
+    let name_tc: String
+    let lat: String
+    let long: String
+    
+    var latitude: Double? {
+        return Double(lat)
+    }
+    
+    var longitude: Double? {
+        return Double(long)
+    }
 }

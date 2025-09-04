@@ -9,6 +9,7 @@ class BusETATableViewCell: UITableViewCell {
     private let destinationLabel = UILabel()
     private let etaStackView = UIStackView()
     private let containerView = UIView()
+    private let separatorLine = UIView()
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -21,18 +22,18 @@ class BusETATableViewCell: UITableViewCell {
     
     private func setupUI() {
         selectionStyle = .none
-        backgroundColor = UIColor.systemBackground
-        contentView.backgroundColor = UIColor.systemBackground
+        backgroundColor = UIColor.black
+        contentView.backgroundColor = UIColor.black
         
-        // Container view with subtle background for better visual separation
-        containerView.backgroundColor = UIColor.secondarySystemBackground
-        containerView.layer.cornerRadius = 8
+        // Container view with black background
+        containerView.backgroundColor = UIColor.black
+        containerView.layer.cornerRadius = 0
         containerView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(containerView)
         
         // Route number label - optimized for readability and impact
-        routeNumberLabel.font = UIFont.monospacedSystemFont(ofSize: 28, weight: .heavy)
-        routeNumberLabel.textColor = UIColor.label
+        routeNumberLabel.font = UIFont.monospacedSystemFont(ofSize: 34, weight: .semibold)
+        routeNumberLabel.textColor = UIColor.white
         routeNumberLabel.textAlignment = .left
         routeNumberLabel.backgroundColor = UIColor.clear
         routeNumberLabel.adjustsFontSizeToFitWidth = true
@@ -40,16 +41,16 @@ class BusETATableViewCell: UITableViewCell {
         routeNumberLabel.translatesAutoresizingMaskIntoConstraints = false
         
         // Stop name label - enhanced for better readability
-        stopNameLabel.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
-        stopNameLabel.textColor = UIColor.label
+        stopNameLabel.font = UIFont.systemFont(ofSize: 15, weight: .medium)
+        stopNameLabel.textColor = UIColor.white
         stopNameLabel.numberOfLines = 1
         stopNameLabel.adjustsFontSizeToFitWidth = true
         stopNameLabel.minimumScaleFactor = 0.9
         stopNameLabel.translatesAutoresizingMaskIntoConstraints = false
         
         // Destination label - improved contrast and readability
-        destinationLabel.font = UIFont.systemFont(ofSize: 11, weight: .regular)
-        destinationLabel.textColor = UIColor.secondaryLabel
+        destinationLabel.font = UIFont.systemFont(ofSize: 11, weight: .medium)
+        destinationLabel.textColor = UIColor.lightGray
         destinationLabel.numberOfLines = 1
         destinationLabel.adjustsFontSizeToFitWidth = true
         destinationLabel.minimumScaleFactor = 0.85
@@ -70,16 +71,21 @@ class BusETATableViewCell: UITableViewCell {
         routeInfoStackView.addArrangedSubview(destinationLabel)
         routeInfoStackView.translatesAutoresizingMaskIntoConstraints = false
         
+        // Separator line
+        separatorLine.backgroundColor = UIColor.systemGray6
+        separatorLine.translatesAutoresizingMaskIntoConstraints = false
+        
         containerView.addSubview(routeNumberLabel)
         containerView.addSubview(routeInfoStackView)
         containerView.addSubview(etaStackView)
+        contentView.addSubview(separatorLine)
         
         NSLayoutConstraint.activate([
-            // Container with subtle margins for better visual separation
-            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
-            containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
+            // Container with minimal margins
+            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 1),
+            containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 0),
+            containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 0),
+            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: 0),
             
             // Route number - 110px width like HTML
             routeNumberLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
@@ -94,7 +100,13 @@ class BusETATableViewCell: UITableViewCell {
             // ETA - 140px width like HTML
             etaStackView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -10),
             etaStackView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            etaStackView.widthAnchor.constraint(equalToConstant: 140)
+            etaStackView.widthAnchor.constraint(equalToConstant: 140),
+            
+            // Separator line
+            separatorLine.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            separatorLine.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            separatorLine.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            separatorLine.heightAnchor.constraint(equalToConstant: 1)
         ])
     }
     
@@ -104,25 +116,29 @@ class BusETATableViewCell: UITableViewCell {
         destinationLabel.text = displayData.destination.isEmpty ? "" : displayData.destination
         
         // Add colored left border based on company like HTML version
-        let borderWidth: CGFloat = 4
         
-        // Remove existing border layers
-        routeNumberLabel.layer.sublayers?.removeAll(where: { $0.name == "companyBorder" })
+        // Remove existing border layers from contentView
+        contentView.layer.sublayers?.removeAll(where: { $0.name == "companyBorder" })
         
         let borderLayer = CALayer()
         borderLayer.name = "companyBorder"
-        borderLayer.frame = CGRect(x: 0, y: 0, width: borderWidth, height: 90)
+        // Center vertically in the 82px cell height
+        let cellHeight: CGFloat = 82
+        let dotSize: CGFloat = 5
+        let yPosition = (cellHeight - dotSize) / 2
+        borderLayer.frame = CGRect(x: 0, y: yPosition, width: dotSize, height: dotSize)
+        borderLayer.cornerRadius = 1 // Slightly rounded corners
         
         switch displayData.route.company {
         case .CTB:
-            borderLayer.backgroundColor = UIColor(red: 0.9, green: 0.8, blue: 0.0, alpha: 1.0).cgColor // Brighter yellow for better visibility
+            borderLayer.backgroundColor = UIColor(red: 0.9, green: 0.8, blue: 0.0, alpha: 1.0).cgColor // Yellow for CTB
         case .KMB:
-            borderLayer.backgroundColor = UIColor(red: 0.9, green: 0.1, blue: 0.1, alpha: 1.0).cgColor // Brighter red for better visibility
+            borderLayer.backgroundColor = UIColor(red: 0.9, green: 0.1, blue: 0.1, alpha: 1.0).cgColor // Red for KMB
         case .NWFB:
-            borderLayer.backgroundColor = UIColor.systemOrange.cgColor
+            borderLayer.backgroundColor = UIColor.systemOrange.cgColor // Orange for NWFB
         }
         
-        routeNumberLabel.layer.addSublayer(borderLayer)
+        contentView.layer.addSublayer(borderLayer)
         
         // Clear previous ETAs
         etaStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -131,7 +147,7 @@ class BusETATableViewCell: UITableViewCell {
         let etasToShow = Array(displayData.etas.prefix(3))
         
         if etasToShow.isEmpty {
-            let noDataLabel = createETALabel(text: "未有資料", isFirst: true)
+            let noDataLabel = createNoDataLabel()
             etaStackView.addArrangedSubview(noDataLabel)
         } else {
             for (index, eta) in etasToShow.enumerated() {
@@ -151,13 +167,26 @@ class BusETATableViewCell: UITableViewCell {
         
         if isFirst {
             // First ETA - larger, with dynamic color support
-            label.font = UIFont.systemFont(ofSize: 18, weight: .heavy)
+            label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
             label.textColor = UIColor.systemTeal
         } else {
             // Other ETAs - refined styling with better contrast
-            label.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-            label.textColor = UIColor.secondaryLabel
+            label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+            label.textColor = UIColor.gray
         }
+        
+        return label
+    }
+    
+    private func createNoDataLabel() -> UILabel {
+        let label = UILabel()
+        label.text = "未有資料"
+        label.textAlignment = .right
+        label.numberOfLines = 1
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.9
+        label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        label.textColor = UIColor.gray // Use gray instead of teal/blue
         
         return label
     }
