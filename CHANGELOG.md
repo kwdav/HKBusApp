@@ -7,6 +7,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2025-09-04
+
+### Fixed
+- **🔧 Search State Synchronization Issues**
+  - Fixed critical state desynchronization between `searchBar.text` (UI state) and `currentSearchText` (internal state)
+  - Resolved issue where returning from other pages would cause search bar to show placeholder but retain old search text internally
+  - Fixed backspace behavior requiring multiple presses to clear text after using "重設" button or page navigation
+  - Added comprehensive state synchronization in `viewDidAppear` lifecycle to ensure UI and internal states match
+
+- **📱 Enhanced Search Bar UX**
+  - Implemented dynamic "重設" (Reset) button that only appears when text is entered
+  - Improved cancel button behavior to properly clear all search states and reload nearby content
+  - Fixed search bar placeholder display issues after page transitions
+  - Ensured consistent search bar behavior across both route search and stop search pages
+
+- **📋 Table View Header Behavior Consistency**
+  - Changed SearchViewController table view style from `.plain` to `.grouped` for consistent header scrolling behavior
+  - "附近路線" (Nearby Routes) headers now scroll with content like "附近站點" (Nearby Stops) headers
+  - Improved visual consistency between route search and stop search interfaces
+
+### Technical Improvements
+- Added `syncSearchStates()` method in SearchViewController for comprehensive state reconciliation
+- Added `syncSearchState()` method in StopSearchViewController for UI state validation
+- Enhanced `searchBarCancelButtonClicked` logic to clear both UI and internal search states
+- Improved state management with proper bidirectional synchronization
+- Added detailed debug logging for search state transitions
+
+## [0.4.1] - 2025-09-04
+
+### Fixed
+- **🔧 Custom Keyboard Visual Design**
+  - Fixed keyboard button colors in dark theme (changed from white to `systemGray5` with white text)
+  - Enhanced keyboard background to dark semi-transparent (`black.withAlphaComponent(0.9)`)
+  - Improved button contrast and visibility with proper border and shadow effects
+  - Maintained blue highlight for search button to provide visual focus
+
+- **📐 Keyboard Layout Optimization** 
+  - Redesigned keyboard with responsive width system - each button is exactly 1/5 of screen width
+  - Numbers section: 3 columns taking 3/5 of screen width
+  - Letters section: 2 columns taking 2/5 of screen width  
+  - Unified 5px spacing between all buttons for consistent visual hierarchy
+  - Added 5px separation gap between numbers and letters sections
+  - All buttons maintain consistent 50px height across the keyboard
+
+- **🚌 Route Display & ETA Loading Issues**
+  - Fixed duplicate nearby routes by implementing intelligent route deduplication
+  - Enhanced route-to-stop matching to select closest stop for each unique route
+  - Improved ETA loading reliability by pre-resolving stop IDs during route preparation
+  - Simplified ETA fetching logic to eliminate complex stop ID lookup failures
+  - Better error handling with detailed logging for debugging route matching issues
+
+### Technical Improvements
+- Eliminated redundant `findStopIdForRoute` method in favor of direct stop ID resolution
+- Enhanced route distance mapping with `(RouteWithDistance, Double)` tuple structure
+- Improved constraint-based layout system for responsive keyboard design
+- Optimized button positioning with relative constraints instead of fixed calculations
+
+## [0.4.0] - 2025-09-04
+
+### Added
+- **⚡ Ultra-Fast Route Loading System**
+  - Sub-second nearby route loading using intelligent location strategies
+  - Smart location caching with UserDefaults (10-minute validity)
+  - Triple-fallback location system: cached → low-accuracy GPS (0.8s timeout) → Central HK
+  - Progressive ETA loading with "..." indicators during fetch
+  - Batch API protection system (5 routes/batch, 0.5s delays) to prevent server blocking
+  - Performance monitoring with detailed timing logs for optimization tracking
+
+- **🎯 Location-Based Route Discovery**
+  - Eliminated default routes for instant user-relevant content
+  - 1km radius search with maximum 30 stops for optimal speed
+  - Smart route deduplication using company+route+direction keys
+  - Automatic location saving for future fast launches
+
+- **🔧 Performance Optimizations**
+  - Route sorting cache to avoid re-processing 2,090 routes on each request  
+  - Reduced GPS accuracy requirement (kCLLocationAccuracyKilometer) for faster responses
+  - Location request timeout (3 seconds maximum) to prevent infinite waiting
+  - Streamlined nearby stop processing with distance-based sorting
+
+### Changed
+- **Route Loading Strategy**: Direct nearby routes instead of default → nearby transition
+- **User Experience**: Instant content display within 1 second of app launch
+- **Location Accuracy**: Prioritized speed over precision for better UX
+- **ETA Display**: Progressive loading with clear loading states ("..." → actual times)
+- **Data Processing**: Optimized for minimal latency and maximum responsiveness
+
+### Fixed
+- Route loading delays caused by GPS acquisition waiting
+- Multiple route loading preventing fast UI updates
+- API overload issues with concurrent ETA requests
+- Location timeout causing indefinite loading states
+- Performance bottlenecks in route sorting and filtering
+
+### Technical Details
+- **Performance Target**: <1 second route display achievement
+- **Location Strategy**: Multi-tier fallback system ensuring content always appears
+- **API Protection**: Intelligent rate limiting prevents server blocking
+- **Memory Optimization**: Efficient caching strategies for repeated usage
+- **Error Resilience**: Graceful fallbacks maintain functionality under all conditions
+
+## [0.3.1] - 2025-09-04
+
 ### Added
 - Complete App Icon integration with all iOS device sizes (iPhone + iPad)
 - Enhanced Route Search page with custom keyboard interface

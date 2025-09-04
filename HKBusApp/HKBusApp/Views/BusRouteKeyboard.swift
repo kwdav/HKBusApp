@@ -4,7 +4,6 @@ protocol BusRouteKeyboardDelegate: AnyObject {
     func keyboardDidTapNumber(_ number: String)
     func keyboardDidTapLetter(_ letter: String)
     func keyboardDidTapBackspace()
-    func keyboardDidTapSearch()
 }
 
 class BusRouteKeyboard: UIView {
@@ -32,7 +31,7 @@ class BusRouteKeyboard: UIView {
     }
     
     private func setupUI() {
-        backgroundColor = UIColor.systemGray6
+        backgroundColor = UIColor.black.withAlphaComponent(0.9)
         layer.cornerRadius = 12
         translatesAutoresizingMaskIntoConstraints = false
         
@@ -58,45 +57,58 @@ class BusRouteKeyboard: UIView {
         containerView.addSubview(numbersContainer)
         
         // Create 3x4 grid (7-9, 4-6, 1-3, 0) - numbers from bottom to top like standard keypad
-        let numbers = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "⌫", "0", "搜尋"]
+        let numbers = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "⌫", "0", ""]
         
         for (index, number) in numbers.enumerated() {
+            // Skip empty slots
+            if number.isEmpty {
+                continue
+            }
+            
             let button = createKeyButton(title: number, isNumber: true)
             button.translatesAutoresizingMaskIntoConstraints = false
             numbersContainer.addSubview(button)
             
             let row = index / 3
             let col = index % 3
-            let buttonWidth: CGFloat = 80
-            let buttonHeight: CGFloat = 45
-            let spacing: CGFloat = 6
+            let buttonHeight: CGFloat = 55  // Increased from 50px to 55px
+            let spacing: CGFloat = 5  // 5px spacing
             
             NSLayoutConstraint.activate([
-                button.widthAnchor.constraint(equalToConstant: buttonWidth),
                 button.heightAnchor.constraint(equalToConstant: buttonHeight),
-                button.leadingAnchor.constraint(equalTo: numbersContainer.leadingAnchor, constant: 12 + CGFloat(col) * (buttonWidth + spacing)),
                 button.topAnchor.constraint(equalTo: numbersContainer.topAnchor, constant: 8 + CGFloat(row) * (buttonHeight + spacing))
             ])
+            
+            // Handle horizontal positioning and width with equal distribution
+            if col == 0 {
+                // First column: leading edge of container
+                button.leadingAnchor.constraint(equalTo: numbersContainer.leadingAnchor).isActive = true
+            } else if col == 1 {
+                // Middle column: positioned between first and last
+                button.centerXAnchor.constraint(equalTo: numbersContainer.centerXAnchor).isActive = true
+            } else {
+                // Last column: trailing edge of container with spacing
+                button.trailingAnchor.constraint(equalTo: numbersContainer.trailingAnchor).isActive = true
+            }
+            
+            // All buttons have equal width using the numbers container width divided by 3, minus spacing
+            button.widthAnchor.constraint(equalTo: numbersContainer.widthAnchor, multiplier: 1.0/3.0, constant: -4).isActive = true // -4 to account for spacing distribution
             
             // Add target based on button type
             if number == "⌫" {
                 button.addTarget(self, action: #selector(backspaceButtonTapped), for: .touchUpInside)
-            } else if number == "搜尋" {
-                button.addTarget(self, action: #selector(searchButtonTapped), for: .touchUpInside)
-                button.backgroundColor = UIColor.systemBlue
-                button.setTitleColor(.white, for: .normal)
             } else {
                 button.addTarget(self, action: #selector(numberButtonTapped(_:)), for: .touchUpInside)
             }
         }
         
-        // Set numbers container constraints (5/3 of width)
+        // Set numbers container constraints - now takes 3/5 of total width (3 columns out of 5)
         NSLayoutConstraint.activate([
             numbersContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             numbersContainer.topAnchor.constraint(equalTo: containerView.topAnchor),
             numbersContainer.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-            numbersContainer.widthAnchor.constraint(equalTo: containerView.widthAnchor, multiplier: 5.0/8.0),
-            numbersContainer.heightAnchor.constraint(equalToConstant: 212) // 4 rows * 45 + 3 * 6 spacing + 16 margins
+            numbersContainer.widthAnchor.constraint(equalTo: containerView.widthAnchor, multiplier: 3.0/5.0),  // 3/5 for 3 columns
+            numbersContainer.heightAnchor.constraint(equalToConstant: 251) // 4 rows * 55 + 3 * 5 spacing + 16 margins
         ])
     }
     
@@ -109,44 +121,65 @@ class BusRouteKeyboard: UIView {
         lettersScrollView.showsVerticalScrollIndicator = false
         lettersContainer.addSubview(lettersScrollView)
         
-        // Stack view for letters
-        lettersStackView.axis = .vertical
-        lettersStackView.spacing = 6
-        lettersStackView.translatesAutoresizingMaskIntoConstraints = false
-        lettersScrollView.addSubview(lettersStackView)
+        // Create letter buttons - 2 per row, each 1/5 of screen width
+        let buttonHeight: CGFloat = 50
+        let spacing: CGFloat = 5  // 5px spacing like numbers
+        let margin: CGFloat = 8
         
-        // Add letter buttons
-        for letter in letters {
+        for (index, letter) in letters.enumerated() {
             let button = createKeyButton(title: letter, isNumber: false)
             button.addTarget(self, action: #selector(letterButtonTapped(_:)), for: .touchUpInside)
-            lettersStackView.addArrangedSubview(button)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            lettersScrollView.addSubview(button)
+            
+            let row = index / 2
+            let col = index % 2
             
             NSLayoutConstraint.activate([
-                button.heightAnchor.constraint(equalToConstant: 35),
-                button.widthAnchor.constraint(equalTo: lettersStackView.widthAnchor, constant: -16)
+                button.heightAnchor.constraint(equalToConstant: buttonHeight),
+                button.topAnchor.constraint(equalTo: lettersScrollView.topAnchor, 
+                                          constant: margin + CGFloat(row) * (buttonHeight + spacing))
             ])
+            
+            // Handle horizontal positioning for 2-column layout in letters container
+            if col == 0 {
+                // First column: left side with explicit width
+                NSLayoutConstraint.activate([
+                    button.leadingAnchor.constraint(equalTo: lettersScrollView.leadingAnchor),
+                    button.widthAnchor.constraint(equalTo: lettersScrollView.widthAnchor, multiplier: 0.5, constant: -2.5)
+                ])
+            } else {
+                // Second column: positioned relative to first column button in same row
+                let firstInRowIndex = row * 2  // Index of first button in this row
+                if firstInRowIndex < index {
+                    let firstButton = lettersScrollView.subviews[firstInRowIndex] as! UIButton
+                    NSLayoutConstraint.activate([
+                        button.leadingAnchor.constraint(equalTo: firstButton.trailingAnchor, constant: spacing),
+                        button.widthAnchor.constraint(equalTo: lettersScrollView.widthAnchor, multiplier: 0.5, constant: -2.5)
+                    ])
+                }
+            }
         }
+        
+        // Calculate content height for scroll view (2-column layout)
+        let rows = (letters.count + 1) / 2 // Round up division
+        let contentHeight = margin * 2 + CGFloat(rows) * buttonHeight + CGFloat(max(0, rows - 1)) * spacing
         
         // Set up constraints
         NSLayoutConstraint.activate([
-            // Letters container (right side)
-            lettersContainer.leadingAnchor.constraint(equalTo: numbersContainer.trailingAnchor, constant: 12),
+            // Letters container (right side) - positioned after numbers with gap
+            lettersContainer.leadingAnchor.constraint(equalTo: numbersContainer.trailingAnchor, constant: 10),  // 10px gap between numbers and letters
             lettersContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             lettersContainer.topAnchor.constraint(equalTo: containerView.topAnchor),
             lettersContainer.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            // Remove conflicting width constraint - let it use remaining space
             
             // Scroll view
             lettersScrollView.topAnchor.constraint(equalTo: lettersContainer.topAnchor),
             lettersScrollView.leadingAnchor.constraint(equalTo: lettersContainer.leadingAnchor),
             lettersScrollView.trailingAnchor.constraint(equalTo: lettersContainer.trailingAnchor),
             lettersScrollView.bottomAnchor.constraint(equalTo: lettersContainer.bottomAnchor),
-            
-            // Stack view
-            lettersStackView.topAnchor.constraint(equalTo: lettersScrollView.topAnchor),
-            lettersStackView.leadingAnchor.constraint(equalTo: lettersScrollView.leadingAnchor, constant: 8),
-            lettersStackView.trailingAnchor.constraint(equalTo: lettersScrollView.trailingAnchor, constant: -8),
-            lettersStackView.bottomAnchor.constraint(equalTo: lettersScrollView.bottomAnchor),
-            lettersStackView.widthAnchor.constraint(equalTo: lettersScrollView.widthAnchor, constant: -16)
+            lettersScrollView.contentLayoutGuide.heightAnchor.constraint(equalToConstant: contentHeight)
         ])
     }
     
@@ -154,12 +187,14 @@ class BusRouteKeyboard: UIView {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
         button.titleLabel?.font = isNumber ? UIFont.systemFont(ofSize: 20, weight: .medium) : UIFont.systemFont(ofSize: 18, weight: .medium)
-        button.backgroundColor = UIColor.white
-        button.setTitleColor(UIColor.label, for: .normal)
+        button.backgroundColor = UIColor.systemGray5
+        button.setTitleColor(UIColor.white, for: .normal)
         button.layer.cornerRadius = 8
+        button.layer.borderWidth = 0.5
+        button.layer.borderColor = UIColor.systemGray4.cgColor
         button.layer.shadowColor = UIColor.black.cgColor
         button.layer.shadowOffset = CGSize(width: 0, height: 1)
-        button.layer.shadowOpacity = 0.1
+        button.layer.shadowOpacity = 0.3
         button.layer.shadowRadius = 2
         
         // Add touch feedback
@@ -185,9 +220,6 @@ class BusRouteKeyboard: UIView {
         delegate?.keyboardDidTapBackspace()
     }
     
-    @objc private func searchButtonTapped() {
-        delegate?.keyboardDidTapSearch()
-    }
     
     @objc private func buttonTouchDown(_ sender: UIButton) {
         UIView.animate(withDuration: 0.1) {
@@ -200,7 +232,7 @@ class BusRouteKeyboard: UIView {
         UIView.animate(withDuration: 0.1) {
             sender.transform = CGAffineTransform.identity
             if sender.backgroundColor != UIColor.systemBlue {
-                sender.backgroundColor = UIColor.white
+                sender.backgroundColor = UIColor.systemGray5
             }
         }
     }

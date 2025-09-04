@@ -34,6 +34,10 @@ class StopSearchViewController: UIViewController {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        
+        // Sync search bar state and ensure correct display
+        syncSearchState()
+        
         // No auto-focus - let user manually tap search bar
     }
     
@@ -42,11 +46,11 @@ class StopSearchViewController: UIViewController {
         view.backgroundColor = UIColor.systemBackground
         
         // Search bar
-        searchBar.placeholder = "搜尋巴士站名稱"
+        searchBar.placeholder = "搜尋站點..."
         searchBar.searchBarStyle = .minimal
         searchBar.tintColor = UIColor.label
         searchBar.barTintColor = UIColor.systemBackground
-        searchBar.showsCancelButton = false
+        searchBar.showsCancelButton = false  // Initially hidden, will show when text is entered
         searchBar.autocapitalizationType = .none
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         
@@ -55,6 +59,9 @@ class StopSearchViewController: UIViewController {
             textField.textColor = UIColor.label
             textField.backgroundColor = UIColor.secondarySystemBackground
         }
+        
+        // Customize Cancel button text
+        UIBarButtonItem.appearance(whenContainedInInstancesOf: [UISearchBar.self]).title = "重設"
         
         // Table view
         tableView.backgroundColor = UIColor.systemBackground
@@ -204,6 +211,32 @@ class StopSearchViewController: UIViewController {
         loadNearbyStops(from: hongKongCenter)
     }
     
+    private func syncSearchState() {
+        let searchText = searchBar.text ?? ""
+        let isEmpty = searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        
+        print("🔄 同步搜尋狀態 - searchBar: '\(searchText)', isEmpty: \(isEmpty)")
+        
+        if isEmpty {
+            // Search bar is empty - ensure we show nearby stops and hide cancel button
+            print("✅ 搜尋欄為空，顯示附近站點")
+            isShowingNearby = true
+            stopSearchResults = []
+            searchBar.setShowsCancelButton(false, animated: false)
+            
+            // If no nearby stops, try to load them
+            if nearbyStops.isEmpty {
+                print("⚠️ 沒有附近站點，重新載入")
+                requestLocationAndLoadNearbyStops()
+            }
+            
+            tableView.reloadData()
+        } else {
+            // Search bar has text - ensure cancel button is shown
+            searchBar.setShowsCancelButton(true, animated: false)
+        }
+    }
+    
     private func showPopularStops() {
         print("🔥 顯示香港熱門巴士站")
         
@@ -319,6 +352,10 @@ class StopSearchViewController: UIViewController {
 // MARK: - UISearchBarDelegate
 extension StopSearchViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        // Show/hide cancel button based on text content
+        let hasText = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        searchBar.setShowsCancelButton(hasText, animated: true)
+        
         // Cancel previous search timer
         searchTimer?.invalidate()
         
@@ -336,9 +373,20 @@ extension StopSearchViewController: UISearchBarDelegate {
     }
     
     func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        // Clear search text and hide cancel button
         searchBar.text = ""
+        searchBar.setShowsCancelButton(false, animated: true)
         searchBar.resignFirstResponder()
+        
+        // Return to showing nearby stops
         isShowingNearby = true
+        stopSearchResults = []
+        
+        // If we don't have nearby stops, reload them
+        if nearbyStops.isEmpty {
+            requestLocationAndLoadNearbyStops()
+        }
+        
         tableView.reloadData()
     }
 }

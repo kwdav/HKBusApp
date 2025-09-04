@@ -5,7 +5,7 @@ import CoreLocation
 class SearchViewController: UIViewController {
     
     private let searchBar = UISearchBar()
-    private let tableView = UITableView(frame: .zero, style: .plain)
+    private let tableView = UITableView(frame: .zero, style: .grouped)
     private let customKeyboard = BusRouteKeyboard()
     // Remove segmented control for now, only support route search
     
@@ -21,6 +21,14 @@ class SearchViewController: UIViewController {
     private let locationManager = CLLocationManager()
     private var currentLocation: CLLocation?
     private var isKeyboardVisible = false
+    private var locationTimer: Timer?
+    
+    // Structure to track route with distance and stop name
+    private struct RouteWithDistance {
+        let stopRoute: StopRoute
+        let distance: Double
+        let stopName: String
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -30,11 +38,17 @@ class SearchViewController: UIViewController {
         setupCustomKeyboard()
         setupTapGesture()
         setupLocationManager()
-        requestLocationAndLoadRoutes()
+        
+        // Immediately load nearby routes without waiting for GPS
+        loadNearbyRoutesImmediately()
     }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        
+        // Sync state between searchBar.text and currentSearchText
+        syncSearchStates()
+        
         // Don't auto focus search bar - user will use custom keyboard
     }
     
@@ -42,11 +56,11 @@ class SearchViewController: UIViewController {
         view.backgroundColor = UIColor.black
         
         // Search bar
-        searchBar.placeholder = "搜尋路線或站點"
+        searchBar.placeholder = "搜尋路線..."
         searchBar.searchBarStyle = .minimal
         searchBar.tintColor = UIColor.white
         searchBar.barTintColor = UIColor.black
-        searchBar.showsCancelButton = true
+        searchBar.showsCancelButton = false  // Initially hidden, will show when text is entered
         searchBar.autocapitalizationType = .allCharacters
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         
@@ -55,6 +69,9 @@ class SearchViewController: UIViewController {
             textField.textColor = UIColor.label
             textField.backgroundColor = UIColor.secondarySystemBackground
         }
+        
+        // Customize Cancel button text
+        UIBarButtonItem.appearance(whenContainedInInstancesOf: [UISearchBar.self]).title = "重設"
         
         // No segmented control - only route search for now
         
@@ -84,7 +101,7 @@ class SearchViewController: UIViewController {
             customKeyboard.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             customKeyboard.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             customKeyboard.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            customKeyboard.heightAnchor.constraint(equalToConstant: 220)
+            customKeyboard.heightAnchor.constraint(equalToConstant: 260)  // Updated from 240 to 260 (20px increase for 4 rows * 5px)
         ])
     }
     
@@ -159,7 +176,7 @@ class SearchViewController: UIViewController {
         
         if isKeyboardVisible {
             // When keyboard is visible, add keyboard height + margin to bottom inset
-            bottomInset = 220 + 16 // keyboard height + margin for content visibility
+            bottomInset = 260 + 16 // keyboard height + margin for content visibility
         } else {
             // When keyboard is hidden, no bottom padding needed as table is full height
             bottomInset = 0
@@ -171,94 +188,151 @@ class SearchViewController: UIViewController {
         }
     }
     
-    private func requestLocationAndLoadRoutes() {
-        switch locationManager.authorizationStatus {
-        case .notDetermined:
-            locationManager.requestWhenInUseAuthorization()
-        case .authorizedWhenInUse, .authorizedAlways:
-            locationManager.requestLocation()
-        case .denied, .restricted:
-            // Load default routes if location access denied
-            loadDefaultRoutes()
-        @unknown default:
-            loadDefaultRoutes()
+    
+    private func startLocationTimeout() {
+        locationTimer?.invalidate()
+        locationTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+            print("⏰ 位置獲取超時，保持顯示默認路線")
+            self.locationManager.stopUpdatingLocation()
         }
     }
     
-    private func loadRoutesFromNearbyStops(location: CLLocation) {
-        print("🔍 開始載入附近站點路線，位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+    // MARK: - Immediate Loading
+    private func loadNearbyRoutesImmediately() {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        print("⚡ 開始快速載入附近路線...")
         
-        // Get nearby stops within 2km
-        let nearbyStops = localDataManager.getNearbyStops(location: location, radiusKm: 2.0, limit: 30)
-        print("📍 找到附近站點: \(nearbyStops.count) 個")
-        
-        if nearbyStops.isEmpty {
-            print("⚠️ 沒有找到附近站點，載入默認路線")
-            loadDefaultRoutes()
+        // Strategy 1: Try to use cached/last known location first
+        if let cachedLocation = getCachedLocation() {
+            print("📍 使用緩存位置: \(cachedLocation.coordinate.latitude), \(cachedLocation.coordinate.longitude)")
+            loadRoutesFromNearbyStops(location: cachedLocation)
             return
         }
         
-        // Create structure to track route with distance and stop name
-        struct RouteWithDistance {
-            let stopRoute: StopRoute
-            let distance: Double
-            let stopName: String
+        // Strategy 2: Use significant location change for faster location
+        locationManager.desiredAccuracy = kCLLocationAccuracyKilometer  // Lower accuracy for speed
+        locationManager.requestLocation()
+        
+        // Strategy 3: Fallback to Central HK if no location within 0.8 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            if self.currentLocation == nil {
+                let centralLocation = CLLocation(latitude: 22.2819, longitude: 114.1585)
+                print("⚡ 0.8秒內無法獲取位置，使用Central作為預設位置")
+                self.loadRoutesFromNearbyStops(location: centralLocation)
+            }
         }
         
-        // Collect all unique routes from nearby stops with distance info
-        var routesSet = Set<String>() // Use Set to avoid duplicates based on route key
-        var routesWithDistance: [RouteWithDistance] = []
+        let setupTime = CFAbsoluteTimeGetCurrent()
+        print("⚡ 快速載入設置完成，耗時: \(String(format: "%.3f", setupTime - startTime))秒")
+    }
+    
+    private func getCachedLocation() -> CLLocation? {
+        // Try to get last known location from UserDefaults
+        let defaults = UserDefaults.standard
+        if let lat = defaults.object(forKey: "lastKnownLat") as? Double,
+           let lng = defaults.object(forKey: "lastKnownLng") as? Double {
+            let cachedTime = defaults.object(forKey: "lastKnownTime") as? TimeInterval ?? 0
+            
+            // Use cached location if it's less than 10 minutes old
+            if Date().timeIntervalSince1970 - cachedTime < 600 {
+                return CLLocation(latitude: lat, longitude: lng)
+            }
+        }
+        return nil
+    }
+    
+    private func saveCachedLocation(_ location: CLLocation) {
+        let defaults = UserDefaults.standard
+        defaults.set(location.coordinate.latitude, forKey: "lastKnownLat")
+        defaults.set(location.coordinate.longitude, forKey: "lastKnownLng")
+        defaults.set(Date().timeIntervalSince1970, forKey: "lastKnownTime")
+    }
+    
+    private func loadRoutesFromNearbyStops(location: CLLocation) {
+        let startTime = CFAbsoluteTimeGetCurrent()
+        print("🔍 開始載入附近站點路線，位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        
+        // Ensure data is loaded first (this should be fast due to caching)
+        guard localDataManager.loadBusData() else {
+            print("❌ 無法載入巴士數據")
+            return
+        }
+        
+        // Step 1: Find nearest stops within 1km (maximum 30 stops for speed)
+        let nearbyStops = localDataManager.getNearbyStops(location: location, radiusKm: 1.0, limit: 30)
+        let findTime = CFAbsoluteTimeGetCurrent()
+        print("📍 找到1km內站點: \(nearbyStops.count) 個，耗時: \(String(format: "%.3f", findTime - startTime))秒")
+        
+        if nearbyStops.isEmpty {
+            print("⚠️ 1km內沒有找到站點")
+            return // Keep showing default routes
+        }
+        
+        // Step 2: Collect unique routes and find the closest stop for each route
+        var routeDistanceMap = [String: (RouteWithDistance, Double)]() // Map route key to closest stop data
         
         for stopResult in nearbyStops {
-            // Calculate distance to this stop
             let stopLocation = CLLocation(latitude: stopResult.latitude!, longitude: stopResult.longitude!)
             let distance = location.distance(from: stopLocation)
             
-            print("🚏 站點: \(stopResult.displayName) (距離: \(Int(distance))m), 路線數: \(stopResult.routes.count)")
-            
             for stopRoute in stopResult.routes {
-                // Create unique key: company + route number + destination (to distinguish directions)
-                let routeKey = "\(stopRoute.company.rawValue)_\(stopRoute.routeNumber)_\(stopRoute.destination)"
-                if !routesSet.contains(routeKey) {
-                    routesSet.insert(routeKey)
-                    let routeWithDistance = RouteWithDistance(
-                        stopRoute: stopRoute,
-                        distance: distance,
-                        stopName: stopResult.displayName
-                    )
-                    routesWithDistance.append(routeWithDistance)
-                    print("✅ 添加路線: \(stopRoute.company.rawValue) \(stopRoute.routeNumber) → \(stopRoute.destination) (距離: \(Int(distance))m)")
+                // Create unique key: company + route + direction
+                let routeKey = "\(stopRoute.company.rawValue)_\(stopRoute.routeNumber)_\(stopRoute.direction)"
+                
+                let routeWithDistance = RouteWithDistance(
+                    stopRoute: stopRoute,
+                    distance: distance,
+                    stopName: stopResult.displayName
+                )
+                
+                // Keep only the closest stop for each unique route
+                if let existingEntry = routeDistanceMap[routeKey] {
+                    if distance < existingEntry.1 {
+                        routeDistanceMap[routeKey] = (routeWithDistance, distance)
+                    }
+                } else {
+                    routeDistanceMap[routeKey] = (routeWithDistance, distance)
                 }
             }
         }
         
-        print("📊 總共收集到路線: \(routesWithDistance.count) 條")
+        // Extract the routes data from the map
+        let routesData = Array(routeDistanceMap.values.map { $0.0 })
         
-        if routesWithDistance.isEmpty {
-            print("⚠️ 沒有找到有效路線，載入默認路線")
-            loadDefaultRoutes()
-            return
+        let processTime = CFAbsoluteTimeGetCurrent()
+        print("🚌 處理到 \(routesData.count) 條獨特路線，耗時: \(String(format: "%.3f", processTime - findTime))秒")
+        
+        if routesData.isEmpty {
+            return // Keep showing default routes
         }
         
-        // Sort by distance (closest stops first), then by route number
-        let sortedRoutes = routesWithDistance.sorted { route1, route2 in
-            if abs(route1.distance - route2.distance) > 50 { // If distance difference > 50m
+        // Step 3: Sort by distance and route number
+        let sortedRoutes = routesData.sorted { route1, route2 in
+            // First by distance
+            if route1.distance != route2.distance {
                 return route1.distance < route2.distance
             }
-            // If distances are similar, sort by route number
-            if route1.stopRoute.routeNumber != route2.stopRoute.routeNumber {
-                return route1.stopRoute.routeNumber.localizedStandardCompare(route2.stopRoute.routeNumber) == .orderedAscending
-            }
-            return route1.stopRoute.company.rawValue < route2.stopRoute.company.rawValue
+            // Then by route number
+            return route1.stopRoute.routeNumber.localizedStandardCompare(route2.stopRoute.routeNumber) == .orderedAscending
         }
         
-        let limitedRoutes = Array(sortedRoutes.prefix(50))
-        
-        busDisplayData = limitedRoutes.map { routeWithDistance in
-            // Convert RouteWithDistance to BusDisplayData
+        // Step 4: Create display data with stop IDs resolved immediately
+        busDisplayData = sortedRoutes.compactMap { routeWithDistance in
+            // Find the stop ID for this route from our nearby stops
+            guard let matchingStop = nearbyStops.first(where: { stopResult in
+                return stopResult.routes.contains { stopRoute in
+                    stopRoute.routeNumber == routeWithDistance.stopRoute.routeNumber &&
+                    stopRoute.company == routeWithDistance.stopRoute.company &&
+                    stopRoute.direction == routeWithDistance.stopRoute.direction
+                }
+            }) else {
+                print("⚠️ 找不到對應站點 ID for route: \(routeWithDistance.stopRoute.routeNumber)")
+                return nil
+            }
+            
             let stopRoute = routeWithDistance.stopRoute
             let busRoute = BusRoute(
-                stopId: "", // Not needed for route display
+                stopId: matchingStop.stopId, // Now we have the correct stop ID
                 route: stopRoute.routeNumber,
                 companyId: stopRoute.company.rawValue,
                 direction: stopRoute.direction,
@@ -267,44 +341,111 @@ class SearchViewController: UIViewController {
             
             return BusDisplayData(
                 route: busRoute,
-                stopName: routeWithDistance.stopName, // Use JSON stop name
+                stopName: routeWithDistance.stopName,
                 destination: stopRoute.destination,
-                etas: []
+                etas: [],
+                isLoadingETAs: true // Show "..." initially
             )
         }
         
-        print("🚌 成功載入 \(busDisplayData.count) 條附近路線")
+        let displayTime = CFAbsoluteTimeGetCurrent()
+        print("✅ 附近路線準備完成，總耗時: \(String(format: "%.3f", displayTime - startTime))秒")
         
+        // Step 5: Update UI immediately
         DispatchQueue.main.async {
             self.tableView.reloadData()
+            print("📱 附近路線顯示完成，開始載入ETA...")
+            // Step 6: Load ETAs after UI update
+            self.loadETAsForNearbyRoutes(routesWithDistance: sortedRoutes)
         }
     }
     
-    private func loadDefaultRoutes() {
-        // Fallback to general routes if no location
-        let routes = localDataManager.getAllRoutes(limit: 50)
+    private func loadETAsForNearbyRoutes(routesWithDistance: [RouteWithDistance]) {
+        print("🔄 開始載入ETA資料，共 \(routesWithDistance.count) 條路線")
         
-        busDisplayData = routes.map { routeInfo in
-            let busRoute = BusRoute(
-                stopId: "",
-                route: routeInfo.routeNumber,
-                companyId: routeInfo.company,
-                direction: routeInfo.direction,
-                subTitle: "\(routeInfo.originTC) → \(routeInfo.destTC)"
-            )
+        // Load ETAs in batches to avoid API rate limiting
+        let batchSize = 5 // Process 5 routes at a time
+        let batches = routesWithDistance.chunked(into: batchSize)
+        
+        for (batchIndex, batch) in batches.enumerated() {
+            // Delay each batch to prevent API overload (stagger requests)
+            let delay = Double(batchIndex) * 0.5 // 0.5 second delay between batches
             
-            return BusDisplayData(
-                route: busRoute,
-                stopName: routeInfo.originTC,
-                destination: routeInfo.destTC,
-                etas: []
-            )
-        }
-        
-        DispatchQueue.main.async {
-            self.tableView.reloadData()
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                self.loadETABatch(batch: batch, batchIndex: batchIndex)
+            }
         }
     }
+    
+    private func loadETABatch(batch: [RouteWithDistance], batchIndex: Int) {
+        print("📦 載入批次 \(batchIndex + 1)，包含 \(batch.count) 條路線")
+        
+        let dispatchGroup = DispatchGroup()
+        
+        for (routeIndex, routeWithDistance) in batch.enumerated() {
+            let globalIndex = (batchIndex * 5) + routeIndex
+            guard globalIndex < busDisplayData.count else { continue }
+            
+            let stopRoute = routeWithDistance.stopRoute
+            
+            // Get stop ID from busDisplayData (already resolved)
+            guard globalIndex < self.busDisplayData.count,
+                  !self.busDisplayData[globalIndex].route.stopId.isEmpty else {
+                print("❌ 沒有找到站點ID for route: \(stopRoute.routeNumber)")
+                continue
+            }
+            
+            let stopId = self.busDisplayData[globalIndex].route.stopId
+            
+            dispatchGroup.enter()
+            
+            // Fetch ETA for this specific route and stop
+            self.apiService.fetchStopETA(
+                stopId: stopId,
+                routeNumber: stopRoute.routeNumber,
+                company: stopRoute.company,
+                direction: stopRoute.direction
+            ) { [weak self] result in
+                defer { dispatchGroup.leave() }
+                
+                switch result {
+                case .success(let etas):
+                    DispatchQueue.main.async {
+                        // Update the corresponding busDisplayData item
+                        if globalIndex < self?.busDisplayData.count ?? 0 {
+                            self?.busDisplayData[globalIndex].etas = etas
+                            self?.busDisplayData[globalIndex].isLoadingETAs = false
+                            // Reload only the specific row to avoid full table refresh
+                            let indexPath = IndexPath(row: globalIndex, section: 0)
+                            if self?.tableView.indexPathsForVisibleRows?.contains(indexPath) == true {
+                                self?.tableView.reloadRows(at: [indexPath], with: .none)
+                            }
+                        }
+                    }
+                    print("✅ ETA載入成功: \(stopRoute.routeNumber) (\(etas.count) 班次)")
+                    
+                case .failure(let error):
+                    DispatchQueue.main.async {
+                        // Update loading state even on failure
+                        if globalIndex < self?.busDisplayData.count ?? 0 {
+                            self?.busDisplayData[globalIndex].isLoadingETAs = false
+                            let indexPath = IndexPath(row: globalIndex, section: 0)
+                            if self?.tableView.indexPathsForVisibleRows?.contains(indexPath) == true {
+                                self?.tableView.reloadRows(at: [indexPath], with: .none)
+                            }
+                        }
+                    }
+                    print("❌ ETA載入失敗: \(stopRoute.routeNumber) - \(error.localizedDescription)")
+                }
+            }
+        }
+        
+        dispatchGroup.notify(queue: .main) {
+            print("📦 批次 \(batchIndex + 1) 載入完成")
+        }
+    }
+    
+
     
     private func performSearch(for query: String) {
         // Only search if query has meaningful content (at least 1 character)
@@ -314,7 +455,8 @@ class SearchViewController: UIViewController {
             if let location = currentLocation {
                 loadRoutesFromNearbyStops(location: location)
             } else {
-                loadDefaultRoutes()
+                // Reload nearby routes immediately
+                loadNearbyRoutesImmediately()
             }
             return
         }
@@ -356,10 +498,14 @@ class SearchViewController: UIViewController {
 // MARK: - UISearchBarDelegate
 extension SearchViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        // Show/hide cancel button based on text content
+        let hasText = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        searchBar.setShowsCancelButton(hasText, animated: true)
+        
         // Cancel previous search timer
         searchTimer?.invalidate()
         
-        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard hasText else {
             routeSearchResults = []
             tableView.reloadData()
             return
@@ -379,9 +525,18 @@ extension SearchViewController: UISearchBarDelegate {
     }
     
     func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        // Clear all search-related data
         searchBar.text = ""
-        searchBar.resignFirstResponder()
+        currentSearchText = ""
         routeSearchResults = []
+        
+        // Hide cancel button since text is now empty
+        searchBar.setShowsCancelButton(false, animated: true)
+        searchBar.resignFirstResponder()
+        
+        // Reload nearby routes to restore the initial state
+        loadNearbyRoutesImmediately()
+        
         tableView.reloadData()
     }
     
@@ -556,9 +711,10 @@ extension SearchViewController: UITableViewDelegate {
     
     // MARK: - Scroll Detection for Keyboard Handling
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        // Hide keyboard when user starts scrolling
+        // Hide keyboard and unfocus search field when user starts scrolling
         if isKeyboardVisible {
             hideKeyboard()
+            searchBar.resignFirstResponder()
         }
     }
     
@@ -617,14 +773,59 @@ extension SearchViewController: BusRouteKeyboardDelegate {
         }
     }
     
-    func keyboardDidTapSearch() {
-        if !currentSearchText.isEmpty {
-            performSearchWithCurrentText()
-        }
-    }
     
     private func updateSearchBar() {
         searchBar.text = currentSearchText
+        
+        // Update cancel button visibility based on text content
+        let hasText = !currentSearchText.trimmingCharacters(in: .whitespaces).isEmpty
+        searchBar.setShowsCancelButton(hasText, animated: true)
+    }
+    
+    private func syncSearchStates() {
+        let searchBarText = searchBar.text ?? ""
+        let searchBarIsEmpty = searchBarText.trimmingCharacters(in: .whitespaces).isEmpty
+        let currentTextIsEmpty = currentSearchText.trimmingCharacters(in: .whitespaces).isEmpty
+        
+        // Debug logging
+        print("🔄 同步搜尋狀態 - searchBar: '\(searchBarText)', currentText: '\(currentSearchText)'")
+        
+        if searchBarIsEmpty && currentTextIsEmpty {
+            // Both empty - ensure we show nearby routes
+            print("✅ 兩者都為空，載入附近路線")
+            routeSearchResults = []
+            if let location = currentLocation {
+                loadRoutesFromNearbyStops(location: location)
+            } else {
+                loadNearbyRoutesImmediately()
+            }
+            searchBar.setShowsCancelButton(false, animated: false)
+        } else if searchBarIsEmpty && !currentTextIsEmpty {
+            // searchBar empty but currentText has value - clear currentText to match
+            print("⚠️ searchBar空但currentText有值，清空currentText")
+            currentSearchText = ""
+            routeSearchResults = []
+            if let location = currentLocation {
+                loadRoutesFromNearbyStops(location: location)
+            } else {
+                loadNearbyRoutesImmediately()
+            }
+            searchBar.setShowsCancelButton(false, animated: false)
+        } else if !searchBarIsEmpty && currentTextIsEmpty {
+            // currentText empty but searchBar has value - sync currentText to searchBar
+            print("⚠️ currentText空但searchBar有值，同步currentText")
+            currentSearchText = searchBarText
+            performSearch(for: currentSearchText)
+        } else if searchBarText != currentSearchText {
+            // Both have values but they're different - use searchBar as source of truth
+            print("⚠️ 兩者都有值但不一致，以searchBar為準")
+            currentSearchText = searchBarText
+            performSearch(for: currentSearchText)
+        }
+        
+        // Ensure cancel button state is correct
+        let hasText = !currentSearchText.trimmingCharacters(in: .whitespaces).isEmpty
+        searchBar.setShowsCancelButton(hasText, animated: false)
     }
     
     private func performSearchWithCurrentText() {
@@ -636,29 +837,60 @@ extension SearchViewController: BusRouteKeyboardDelegate {
 extension SearchViewController: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
+        
+        // Cancel timeout timer
+        locationTimer?.invalidate()
+        locationTimer = nil
+        
         currentLocation = location
         locationManager.stopUpdatingLocation()
         
-        print("✅ 搜尋頁面獲取到位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-        loadRoutesFromNearbyStops(location: location)
+        // Save location for future fast loading
+        saveCachedLocation(location)
+        
+        print("✅ 位置獲取成功: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        
+        // Only load routes if we haven't loaded them yet (avoid duplicate loading)
+        if busDisplayData.isEmpty {
+            loadRoutesFromNearbyStops(location: location)
+        } else {
+            print("📱 路線已載入，更新為真實位置的路線")
+            loadRoutesFromNearbyStops(location: location)
+        }
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("❌ 搜尋頁面位置獲取失敗: \(error.localizedDescription)")
-        loadDefaultRoutes()
+        // Cancel timeout timer
+        locationTimer?.invalidate()
+        locationTimer = nil
+        
+        print("❌ 位置獲取失敗: \(error.localizedDescription)")
+        // Keep showing default routes, don't reload
     }
     
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
+            print("✅ 獲得位置權限，開始請求位置")
             manager.requestLocation()
+            startLocationTimeout() // Add timeout for this request too
         case .denied, .restricted:
-            print("⚠️ 搜尋頁面位置權限被拒絕，使用默認路線")
-            loadDefaultRoutes()
+            print("⚠️ 位置權限被拒絕，保持顯示默認路線")
+            // Don't reload default routes, they're already showing
         case .notDetermined:
+            print("📍 位置權限待定")
             break
         @unknown default:
-            loadDefaultRoutes()
+            print("⚠️ 未知位置權限狀態")
+        }
+    }
+}
+
+// MARK: - Array Extension for Batch Processing
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0..<Swift.min($0 + size, count)])
         }
     }
 }
