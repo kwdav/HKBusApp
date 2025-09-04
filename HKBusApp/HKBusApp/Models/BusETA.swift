@@ -79,13 +79,15 @@ struct BusDisplayData {
     let route: BusRoute
     let stopName: String
     let destination: String
-    let etas: [BusETA]
+    var etas: [BusETA]
+    var isLoadingETAs: Bool
     
-    init(route: BusRoute, stopName: String = "", destination: String = "", etas: [BusETA] = []) {
+    init(route: BusRoute, stopName: String = "", destination: String = "", etas: [BusETA] = [], isLoadingETAs: Bool = false) {
         self.route = route
         self.stopName = stopName
         self.destination = destination
         self.etas = etas
+        self.isLoadingETAs = isLoadingETAs
     }
 }
 

@@ -614,6 +614,16 @@ extension BusListViewController: UITableViewDelegate {
             let displayData = groupedData[indexPath.section].routes[indexPath.row]
             favoritesManager.removeFavorite(displayData.route)
             loadData()
+            
+            // Check if no favorites left, reset initial tab behavior for next launch
+            let remainingFavorites = favoritesManager.getAllFavorites().count
+            if remainingFavorites == 0 {
+                // Reset the initial tab behavior so next launch will go to route search
+                if let tabBarController = self.tabBarController as? MainTabBarController {
+                    tabBarController.resetInitialTabBehavior()
+                    print("📱 所有收藏已刪除，下次啟動將自動切換到路線搜尋頁面")
+                }
+            }
         }
     }
     

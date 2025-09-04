@@ -7,6 +7,7 @@ class SearchViewController: UIViewController {
     private let searchBar = UISearchBar()
     private let tableView = UITableView(frame: .zero, style: .grouped)
     private let customKeyboard = BusRouteKeyboard()
+    private let refreshControl = UIRefreshControl()
     // Remove segmented control for now, only support route search
     
     private var routeSearchResults: [RouteSearchResult] = []
@@ -123,6 +124,15 @@ class SearchViewController: UIViewController {
         tableView.sectionHeaderTopPadding = 0 // Reduce top padding for iOS 15+
         tableView.register(SearchResultTableViewCell.self, forCellReuseIdentifier: SearchResultTableViewCell.identifier)
         tableView.register(BusETATableViewCell.self, forCellReuseIdentifier: BusETATableViewCell.identifier)
+        
+        // Setup refresh control for pull-to-refresh
+        refreshControl.tintColor = UIColor.white
+        refreshControl.attributedTitle = NSAttributedString(
+            string: "更新附近路線",
+            attributes: [.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 14)]
+        )
+        refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
+        tableView.refreshControl = refreshControl
     }
     
     private func setupCustomKeyboard() {
@@ -185,6 +195,36 @@ class SearchViewController: UIViewController {
         UIView.animate(withDuration: 0.25) {
             self.tableView.contentInset.bottom = bottomInset
             self.tableView.verticalScrollIndicatorInsets.bottom = bottomInset
+        }
+    }
+    
+    @objc private func handleRefresh() {
+        print("🔄 用戶下拉刷新附近路線")
+        
+        // Hide keyboard if visible
+        if isKeyboardVisible {
+            hideKeyboard()
+            searchBar.resignFirstResponder()
+        }
+        
+        // Clear current search results to show only nearby routes
+        routeSearchResults = []
+        currentSearchText = ""
+        searchBar.text = ""
+        searchBar.setShowsCancelButton(false, animated: true)
+        
+        // Force refresh nearby routes with new location
+        currentLocation = nil // Clear cached location to force new location request
+        
+        // Start location updates for fresh data
+        locationManager.requestLocation()
+        
+        // Also load immediately with cached/fallback location
+        loadNearbyRoutesImmediately()
+        
+        // End refresh after a short delay to show completion
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.refreshControl.endRefreshing()
         }
     }
     
@@ -269,6 +309,7 @@ class SearchViewController: UIViewController {
         }
         
         // Step 2: Collect unique routes and find the closest stop for each route
+        // Use simple key (company + route) to avoid showing same route number multiple times
         var routeDistanceMap = [String: (RouteWithDistance, Double)]() // Map route key to closest stop data
         
         for stopResult in nearbyStops {
@@ -276,8 +317,9 @@ class SearchViewController: UIViewController {
             let distance = location.distance(from: stopLocation)
             
             for stopRoute in stopResult.routes {
-                // Create unique key: company + route + direction
-                let routeKey = "\(stopRoute.company.rawValue)_\(stopRoute.routeNumber)_\(stopRoute.direction)"
+                // Create simple unique key: company + route (ignoring direction and destination)
+                // This ensures each route number appears only once
+                let routeKey = "\(stopRoute.company.rawValue)_\(stopRoute.routeNumber)"
                 
                 let routeWithDistance = RouteWithDistance(
                     stopRoute: stopRoute,
@@ -285,13 +327,17 @@ class SearchViewController: UIViewController {
                     stopName: stopResult.displayName
                 )
                 
-                // Keep only the closest stop for each unique route
+                // Keep only the closest stop for each route number
                 if let existingEntry = routeDistanceMap[routeKey] {
                     if distance < existingEntry.1 {
                         routeDistanceMap[routeKey] = (routeWithDistance, distance)
+                        print("🔄 更新路線 \(stopRoute.routeNumber) 到更近的站點 \(stopResult.displayName) (距離: \(Int(distance))米)")
+                    } else {
+                        print("⏭️ 跳過較遠的站點 \(stopResult.displayName) for 路線 \(stopRoute.routeNumber) (距離: \(Int(distance))米 vs \(Int(existingEntry.1))米)")
                     }
                 } else {
                     routeDistanceMap[routeKey] = (routeWithDistance, distance)
+                    print("➕ 新增路線 \(stopRoute.routeNumber) from 站點 \(stopResult.displayName) (距離: \(Int(distance))米)")
                 }
             }
         }
@@ -339,9 +385,19 @@ class SearchViewController: UIViewController {
                 subTitle: stopRoute.destination
             )
             
+            // Format distance for display
+            let distanceText: String
+            if routeWithDistance.distance < 1000 {
+                // Less than 1km, show in meters
+                distanceText = "(\(Int(routeWithDistance.distance))米)"
+            } else {
+                // 1km or more, show in km with 1 decimal place
+                distanceText = "(\(String(format: "%.1f", routeWithDistance.distance / 1000.0))公里)"
+            }
+            
             return BusDisplayData(
                 route: busRoute,
-                stopName: routeWithDistance.stopName,
+                stopName: "\(routeWithDistance.stopName) \(distanceText)",
                 destination: stopRoute.destination,
                 etas: [],
                 isLoadingETAs: true // Show "..." initially
@@ -719,11 +775,8 @@ extension SearchViewController: UITableViewDelegate {
     }
     
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        // Show keyboard when scrolled to top AND user is not actively using keyboard
-        // Only show keyboard if scroll was intentional (not during keyboard usage)
-        if scrollView.contentOffset.y <= 0 && !isKeyboardVisible && !scrollView.isDragging {
-            showKeyboard()
-        }
+        // Remove auto keyboard trigger when scrolling to top
+        // Users can manually tap search bar to activate keyboard
     }
 }
 

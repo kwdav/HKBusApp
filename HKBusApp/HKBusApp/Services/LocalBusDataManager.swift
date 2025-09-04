@@ -13,6 +13,7 @@ class LocalBusDataManager {
     private let dataFileName = "bus_data.json"
     private var busData: LocalBusData?
     private var isLoaded = false
+    private var cachedSortedRoutes: [LocalRouteInfo]? // Cache sorted routes to avoid re-sorting
     
     private init() {}
     
@@ -25,6 +26,7 @@ class LocalBusDataManager {
         
         guard let fileURL = Bundle.main.url(forResource: "bus_data", withExtension: "json") else {
             print("❌ LocalBusDataManager: bus_data.json not found in bundle")
+            print("📁 Bundle資源: \(Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: nil) ?? [])")
             return false
         }
         
@@ -136,15 +138,22 @@ class LocalBusDataManager {
     func getAllRoutes(limit: Int = 50) -> [LocalRouteInfo] {
         guard loadBusData(), let data = busData else { return [] }
         
-        let allRoutes = Array(data.routes.values)
-        let sortedRoutes = allRoutes.sorted { route1, route2 in
-            // Sort by route number, then by company
-            if route1.routeNumber != route2.routeNumber {
-                return route1.routeNumber.localizedStandardCompare(route2.routeNumber) == .orderedAscending
+        // Use cached sorted routes if available
+        if cachedSortedRoutes == nil {
+            let startTime = CFAbsoluteTimeGetCurrent()
+            let allRoutes = Array(data.routes.values)
+            cachedSortedRoutes = allRoutes.sorted { route1, route2 in
+                // Sort by route number, then by company
+                if route1.routeNumber != route2.routeNumber {
+                    return route1.routeNumber.localizedStandardCompare(route2.routeNumber) == .orderedAscending
+                }
+                return route1.company < route2.company
             }
-            return route1.company < route2.company
+            let endTime = CFAbsoluteTimeGetCurrent()
+            print("🔄 路線排序耗時: \(String(format: "%.3f", endTime - startTime))秒，共 \(allRoutes.count) 條路線")
         }
         
+        guard let sortedRoutes = cachedSortedRoutes else { return [] }
         return Array(sortedRoutes.prefix(limit))
     }
     
