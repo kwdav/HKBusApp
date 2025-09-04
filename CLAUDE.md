@@ -451,9 +451,16 @@ The app now supports comprehensive route search across all major Hong Kong bus c
 - ✅ **FIXED**: Dynamic "重設" button behavior and text clearing logic
 - ✅ **FIXED**: Table view header scrolling consistency between search pages
 
-### 🛠️ Recent Bug Fixes (Updated: 2025-09-04)
+### 🛠️ Recent Bug Fixes (Updated: 2025-09-05)
 
-1. **Search State Synchronization Fix** - Fixed critical state desynchronization issues (v0.4.2)
+1. **"未有資料" Text Color Fix** - Fixed incorrect blue/teal color for no-data text (v0.4.3)
+   - Problem: "未有資料" text was displaying in `systemTeal` color instead of gray when it was the first ETA
+   - Root Cause: `createETALabel()` functions applied `systemTeal` to first ETA without checking for no-data text
+   - Solution: Added explicit text checking - if text equals "未有資料", use gray color regardless of position
+   - Impact: Consistent gray color for all no-data states across the app
+   - Files affected: `BusETATableViewCell.swift` (line 169), `StopRoutesViewController.swift` (line 546)
+
+2. **Search State Synchronization Fix** - Fixed critical state desynchronization issues (v0.4.2)
    - Problem: `searchBar.text` (UI state) and `currentSearchText` (internal state) becoming out of sync during page navigation
    - Root Cause: Single-direction state updates without lifecycle synchronization
    - Solution: Added `syncSearchStates()` method called in `viewDidAppear` to reconcile all possible state mismatches

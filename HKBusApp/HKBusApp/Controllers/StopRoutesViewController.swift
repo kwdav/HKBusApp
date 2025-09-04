@@ -542,7 +542,11 @@ class StopRouteTableViewCell: UITableViewCell {
         label.adjustsFontSizeToFitWidth = true
         label.minimumScaleFactor = 0.9
         
-        if isFirst {
+        // Check if it's "未有資料" and use gray color
+        if text == "未有資料" {
+            label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+            label.textColor = UIColor.gray
+        } else if isFirst {
             // First ETA - larger, more prominent
             label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
             label.textColor = UIColor.systemTeal

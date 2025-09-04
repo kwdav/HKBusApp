@@ -147,7 +147,7 @@ class BusETATableViewCell: UITableViewCell {
         let etasToShow = Array(displayData.etas.prefix(3))
         
         if etasToShow.isEmpty {
-            let noDataLabel = createNoDataLabel()
+            let noDataLabel = createNoDataLabel(isLoading: displayData.isLoadingETAs)
             etaStackView.addArrangedSubview(noDataLabel)
         } else {
             for (index, eta) in etasToShow.enumerated() {
@@ -165,7 +165,11 @@ class BusETATableViewCell: UITableViewCell {
         label.adjustsFontSizeToFitWidth = true
         label.minimumScaleFactor = 0.9
         
-        if isFirst {
+        // Check if it's "未有資料" and use gray color
+        if text == "未有資料" {
+            label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+            label.textColor = UIColor.gray
+        } else if isFirst {
             // First ETA - larger, with dynamic color support
             label.font = UIFont.systemFont(ofSize: 18, weight: .medium)
             label.textColor = UIColor.systemTeal
@@ -178,9 +182,9 @@ class BusETATableViewCell: UITableViewCell {
         return label
     }
     
-    private func createNoDataLabel() -> UILabel {
+    private func createNoDataLabel(isLoading: Bool = false) -> UILabel {
         let label = UILabel()
-        label.text = "未有資料"
+        label.text = isLoading ? "..." : "未有資料"
         label.textAlignment = .right
         label.numberOfLines = 1
         label.adjustsFontSizeToFitWidth = true

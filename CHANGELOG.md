@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2025-09-05
+
+### Fixed
+- **🎨 "未有資料" Text Color Consistency**
+  - Fixed issue where "未有資料" (No Data) text was incorrectly displaying in blue/teal color instead of gray
+  - Modified `createETALabel()` functions in both `BusETATableViewCell.swift` and `StopRoutesViewController.swift` to explicitly check for "未有資料" text and apply gray color
+  - Ensured consistent gray color for all no-data states across the app regardless of ETA position priority
+  - Maintained `systemTeal` color for actual ETA times while fixing no-data text appearance
+
+### Technical Details
+- Added conditional text checking in ETA label creation functions
+- Fixed color hierarchy logic to prioritize no-data states over first ETA styling
+- Ensured visual consistency across all bus ETA display components
+
 ## [0.4.2] - 2025-09-04
 
 ### Fixed
