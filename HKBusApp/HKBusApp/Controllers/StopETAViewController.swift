@@ -149,12 +149,16 @@ class StopETAViewController: UIViewController {
         tableView.backgroundColor = UIColor.systemBackground
         tableView.separatorStyle = .none
         tableView.translatesAutoresizingMaskIntoConstraints = false
-        
+
         // Refresh control
         refreshControl.tintColor = UIColor.label
+        refreshControl.attributedTitle = NSAttributedString(
+            string: "更新到站時間",
+            attributes: [.foregroundColor: UIColor.label, .font: UIFont.systemFont(ofSize: 14)]
+        )
         refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
         tableView.refreshControl = refreshControl
-        
+
         view.addSubview(tableView)
         
         NSLayoutConstraint.activate([
@@ -275,16 +279,16 @@ class ETATableViewCell: UITableViewCell {
     }
     
     private func setupUI() {
-        backgroundColor = UIColor.black
-        contentView.backgroundColor = UIColor.black
+        backgroundColor = UIColor.systemBackground
+        contentView.backgroundColor = UIColor.systemBackground
         selectionStyle = .none
         
-        containerView.backgroundColor = UIColor(white: 0.05, alpha: 1.0)
+        containerView.backgroundColor = UIColor.secondarySystemBackground
         containerView.layer.cornerRadius = 8
         containerView.translatesAutoresizingMaskIntoConstraints = false
         
         routeLabel.font = UIFont.boldSystemFont(ofSize: 20)
-        routeLabel.textColor = .white
+        routeLabel.textColor = UIColor.label
         routeLabel.translatesAutoresizingMaskIntoConstraints = false
         
         etaLabel.font = UIFont.boldSystemFont(ofSize: 24)
@@ -292,7 +296,7 @@ class ETATableViewCell: UITableViewCell {
         etaLabel.translatesAutoresizingMaskIntoConstraints = false
         
         timeLabel.font = UIFont.systemFont(ofSize: 14)
-        timeLabel.textColor = UIColor(white: 0.7, alpha: 1.0)
+        timeLabel.textColor = UIColor.secondaryLabel
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
         
         nextLabel.font = UIFont.systemFont(ofSize: 12, weight: .medium)

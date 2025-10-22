@@ -16,40 +16,62 @@ class StopSearchResultTableViewCell: UITableViewCell {
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         setupUI()
+
+        // Listen for font size changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(fontSizeDidChange),
+            name: FontSizeManager.fontSizeDidChangeNotification,
+            object: nil
+        )
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func fontSizeDidChange() {
+        updateFonts()
+    }
+
+    private func updateFonts() {
+        stopNameLabel.font = UIFont.appStationName
+        routesLabel.font = UIFont.appRegularText
+        distanceLabel.font = UIFont.appRegularText
     }
     
     // MARK: - UI Setup
     private func setupUI() {
-        backgroundColor = UIColor.black
-        contentView.backgroundColor = UIColor.black
+        backgroundColor = UIColor.systemBackground
+        contentView.backgroundColor = UIColor.systemBackground
         selectionStyle = .none
         
-        // Container view with black background like bus time design
-        containerView.backgroundColor = UIColor.black
+        // Container view with adaptive background like bus time design
+        containerView.backgroundColor = UIColor.systemBackground
         containerView.layer.cornerRadius = 0
         containerView.translatesAutoresizingMaskIntoConstraints = false
         
         // Stop name - large and prominent
-        stopNameLabel.font = UIFont.systemFont(ofSize: 21, weight: .semibold)
-        stopNameLabel.textColor = UIColor.white
+        stopNameLabel.font = UIFont.appStationName
+        stopNameLabel.textColor = UIColor.label
         stopNameLabel.numberOfLines = 1
         stopNameLabel.adjustsFontSizeToFitWidth = true
         stopNameLabel.minimumScaleFactor = 0.8
         stopNameLabel.translatesAutoresizingMaskIntoConstraints = false
-        
+
         // Routes label - shows all route numbers
-        routesLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        routesLabel.textColor = UIColor.lightGray
+        routesLabel.font = UIFont.appRegularText
+        routesLabel.textColor = UIColor.secondaryLabel
         routesLabel.numberOfLines = 1
         routesLabel.translatesAutoresizingMaskIntoConstraints = false
-        
+
         // Distance label - only distance
-        distanceLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        distanceLabel.textColor = UIColor.lightGray
+        distanceLabel.font = UIFont.appRegularText
+        distanceLabel.textColor = UIColor.secondaryLabel
         distanceLabel.textAlignment = .right
         distanceLabel.numberOfLines = 1
         distanceLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -77,14 +99,14 @@ class StopSearchResultTableViewCell: UITableViewCell {
             containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 0),
             containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -1),
             
-            // Stop name - top aligned
+            // Stop name - vertically centered above routes
             stopNameLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 16),
-            stopNameLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
+            stopNameLabel.centerYAnchor.constraint(equalTo: containerView.centerYAnchor, constant: -12),
             stopNameLabel.trailingAnchor.constraint(lessThanOrEqualTo: distanceLabel.leadingAnchor, constant: -12),
             
-            // Routes label - below stop name
+            // Routes label - below stop name, vertically centered
             routesLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 16),
-            routesLabel.topAnchor.constraint(equalTo: stopNameLabel.bottomAnchor, constant: 4),
+            routesLabel.topAnchor.constraint(equalTo: stopNameLabel.bottomAnchor, constant: 2),
             routesLabel.trailingAnchor.constraint(lessThanOrEqualTo: distanceLabel.leadingAnchor, constant: -12),
             
             // Distance - centered vertically, right aligned
@@ -136,7 +158,7 @@ class StopSearchResultTableViewCell: UITableViewCell {
         
         UIView.animate(withDuration: 0.1) {
             self.containerView.backgroundColor = highlighted ? 
-                UIColor.systemGray6 : UIColor.black
+                UIColor.systemGray6 : UIColor.systemBackground
         }
     }
 }

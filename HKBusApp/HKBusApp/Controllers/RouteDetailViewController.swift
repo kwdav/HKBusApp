@@ -1,4 +1,5 @@
 import UIKit
+import CoreLocation
 
 class RouteDetailViewController: UIViewController {
     
@@ -12,15 +13,22 @@ class RouteDetailViewController: UIViewController {
     private let favoritesManager = FavoritesManager.shared
     private var routeDetail: BusRouteDetail?
     private var isLoading = false
-    private var isFavorite = false
+    
+    // ETA display state
+    private var expandedStopIndex: Int? = nil
+    private var hasAutoLoadedNearestStop = false // Track if we've already auto-loaded once
+    private var etaRefreshTimer: Timer? // Timer for auto-refresh of expanded ETA
+    
+    // Location management
+    private let locationManager = CLLocationManager()
+    private var currentLocation: CLLocation?
+    private var locationTimer: Timer?
     
     // MARK: - UI Components
-    private let headerView = UIView()
-    private let routeLabel = UILabel()
-    private let companyLabel = UILabel()
+    private let headerButton = UIButton(type: .system)
     private let directionLabel = UILabel()
     private let durationLabel = UILabel()
-    private let favoriteButton = UIButton(type: .system)
+    private let directionIcon = UIImageView()
     private let loadingIndicator = UIActivityIndicatorView(style: .medium)
     
     // MARK: - Initialization
@@ -40,8 +48,20 @@ class RouteDetailViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
         setupTableView()
-        checkFavoriteStatus()
+        setupLocationManager()
         loadRouteDetail()
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Try auto-expand immediately if both route and location are ready
+        if routeDetail != nil && currentLocation != nil && !hasAutoLoadedNearestStop {
+            print("📍 ViewDidAppear: Attempting immediate auto-expand")
+            // Small delay to ensure table view is fully loaded
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.tryAutoExpandNearestStop()
+            }
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -53,95 +73,111 @@ class RouteDetailViewController: UIViewController {
         }
     }
     
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // Stop ETA refresh timer when leaving the view
+        stopETARefreshTimer()
+    }
+    
     // MARK: - UI Setup
     private func setupUI() {
         view.backgroundColor = UIColor.systemBackground
-        title = "\(company.rawValue) \(routeNumber)"
+        title = routeNumber
         
-        // Navigation bar setup - support both light and dark mode
+        // Navigation bar setup - support both light and dark mode with larger title font
         navigationController?.navigationBar.tintColor = UIColor.label
-        navigationController?.navigationBar.titleTextAttributes = [.foregroundColor: UIColor.label]
+        navigationController?.navigationBar.titleTextAttributes = [
+            .foregroundColor: UIColor.label,
+            .font: UIFont.systemFont(ofSize: 32, weight: .bold)
+        ]
         navigationController?.navigationBar.barStyle = .default
+        
+        // Add company button to navigation bar
+        setupCompanyButton()
+        setupHeaderButton()
         
         setupHeaderView()
         setupTableViewLayout()
     }
     
+    private func setupCompanyButton() {
+        // Create a custom button for the company
+        let companyButton = UIButton(type: .system)
+        companyButton.setTitle(company.rawValue, for: .normal)
+        companyButton.setTitleColor(.white, for: .normal)
+        companyButton.backgroundColor = companyColor(for: company)
+        companyButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        companyButton.layer.cornerRadius = 4
+        
+        // Use modern button configuration for iOS 15+
+        if #available(iOS 15.0, *) {
+            var config = UIButton.Configuration.plain()
+            config.title = company.rawValue
+            config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
+            companyButton.configuration = config
+        } else {
+            companyButton.contentEdgeInsets = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
+        }
+        
+        // Add company button to navigation bar
+        let companyBarButton = UIBarButtonItem(customView: companyButton)
+        navigationItem.rightBarButtonItem = companyBarButton
+    }
+    
+    private func setupHeaderButton() {
+        // Setup entire header as clickable button
+        headerButton.backgroundColor = UIColor.secondarySystemBackground
+        headerButton.layer.cornerRadius = 12
+        headerButton.addTarget(self, action: #selector(directionButtonTapped), for: .touchUpInside)
+        headerButton.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Setup direction icon
+        directionIcon.image = UIImage(systemName: "arrow.up.arrow.down")
+        directionIcon.tintColor = UIColor.label
+        directionIcon.contentMode = .scaleAspectFit
+        directionIcon.translatesAutoresizingMaskIntoConstraints = false
+    }
+    
     private func setupHeaderView() {
-        headerView.backgroundColor = UIColor.secondarySystemBackground
-        headerView.layer.cornerRadius = 12
-        headerView.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Route number
-        routeLabel.text = routeNumber
-        routeLabel.font = UIFont.boldSystemFont(ofSize: 32)
-        routeLabel.textColor = UIColor.label
-        routeLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Company label with color coding
-        companyLabel.text = company.rawValue
-        companyLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        companyLabel.textColor = .white
-        companyLabel.backgroundColor = companyColor(for: company)
-        companyLabel.textAlignment = .center
-        companyLabel.layer.cornerRadius = 4
-        companyLabel.clipsToBounds = true
-        companyLabel.translatesAutoresizingMaskIntoConstraints = false
-        
         // Direction label
         directionLabel.text = "載入中..."
-        directionLabel.font = UIFont.systemFont(ofSize: 16)
-        directionLabel.textColor = UIColor.secondaryLabel
+        directionLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        directionLabel.textColor = UIColor.label
         directionLabel.numberOfLines = 0
+        directionLabel.isUserInteractionEnabled = false
         directionLabel.translatesAutoresizingMaskIntoConstraints = false
         
         // Duration label
         durationLabel.text = ""
-        durationLabel.font = UIFont.systemFont(ofSize: 14)
-        durationLabel.textColor = UIColor.tertiaryLabel
+        durationLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        durationLabel.textColor = UIColor.secondaryLabel
+        durationLabel.isUserInteractionEnabled = false
         durationLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        // Favorite button
-        favoriteButton.setImage(UIImage(systemName: "star"), for: .normal)
-        favoriteButton.setImage(UIImage(systemName: "star.fill"), for: .selected)
-        favoriteButton.tintColor = UIColor.systemYellow
-        favoriteButton.addTarget(self, action: #selector(favoriteButtonTapped), for: .touchUpInside)
-        favoriteButton.translatesAutoresizingMaskIntoConstraints = false
+        headerButton.addSubview(directionLabel)
+        headerButton.addSubview(durationLabel)
+        headerButton.addSubview(directionIcon)
         
-        headerView.addSubview(routeLabel)
-        headerView.addSubview(companyLabel)
-        headerView.addSubview(directionLabel)
-        headerView.addSubview(durationLabel)
-        headerView.addSubview(favoriteButton)
-        
-        view.addSubview(headerView)
+        view.addSubview(headerButton)
         
         NSLayoutConstraint.activate([
-            headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
-            headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            headerView.heightAnchor.constraint(greaterThanOrEqualToConstant: 120),
+            headerButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            headerButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            headerButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            headerButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 60),
             
-            routeLabel.topAnchor.constraint(equalTo: headerView.topAnchor, constant: 16),
-            routeLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 16),
+            directionLabel.centerYAnchor.constraint(equalTo: headerButton.centerYAnchor),
+            directionLabel.leadingAnchor.constraint(equalTo: headerButton.leadingAnchor, constant: 20),
+            directionLabel.trailingAnchor.constraint(lessThanOrEqualTo: directionIcon.leadingAnchor, constant: -20),
             
-            companyLabel.centerYAnchor.constraint(equalTo: routeLabel.centerYAnchor),
-            companyLabel.trailingAnchor.constraint(equalTo: favoriteButton.leadingAnchor, constant: -12),
-            companyLabel.widthAnchor.constraint(equalToConstant: 60),
-            companyLabel.heightAnchor.constraint(equalToConstant: 24),
+            directionIcon.centerYAnchor.constraint(equalTo: headerButton.centerYAnchor),
+            directionIcon.trailingAnchor.constraint(equalTo: headerButton.trailingAnchor, constant: -20),
+            directionIcon.widthAnchor.constraint(equalToConstant: 24),
+            directionIcon.heightAnchor.constraint(equalToConstant: 24),
             
-            favoriteButton.centerYAnchor.constraint(equalTo: routeLabel.centerYAnchor),
-            favoriteButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -16),
-            favoriteButton.widthAnchor.constraint(equalToConstant: 32),
-            favoriteButton.heightAnchor.constraint(equalToConstant: 32),
-            
-            directionLabel.topAnchor.constraint(equalTo: routeLabel.bottomAnchor, constant: 8),
-            directionLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 16),
-            directionLabel.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -16),
-            
-            durationLabel.topAnchor.constraint(equalTo: directionLabel.bottomAnchor, constant: 4),
-            durationLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 16),
-            durationLabel.bottomAnchor.constraint(equalTo: headerView.bottomAnchor, constant: -16)
+            durationLabel.centerYAnchor.constraint(equalTo: headerButton.centerYAnchor),
+            durationLabel.leadingAnchor.constraint(equalTo: headerButton.leadingAnchor, constant: 20),
+            durationLabel.trailingAnchor.constraint(lessThanOrEqualTo: directionIcon.leadingAnchor, constant: -20)
         ])
     }
     
@@ -153,11 +189,40 @@ class RouteDetailViewController: UIViewController {
         view.addSubview(tableView)
         
         NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
+            tableView.topAnchor.constraint(equalTo: headerButton.bottomAnchor, constant: 4),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
         ])
+    }
+    
+    private func setupLocationManager() {
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyKilometer // Use lower accuracy for faster response
+        
+        print("📍 Setting up location manager, current status: \(locationManager.authorizationStatus.rawValue)")
+        
+        // Request authorization and start getting location
+        switch locationManager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            print("📍 Location authorized, requesting location")
+            if CLLocationManager.locationServicesEnabled() {
+                locationManager.requestLocation()
+                
+                // Set up a backup timer with shorter timeout for faster response
+                locationTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+                    self?.handleLocationTimeout()
+                }
+            }
+        case .notDetermined:
+            print("📍 Location not determined, requesting authorization")
+            locationManager.requestWhenInUseAuthorization()
+        case .denied, .restricted:
+            print("📍 Location access denied or restricted")
+        @unknown default:
+            print("📍 Unknown location authorization status")
+            break
+        }
     }
     
     private func setupTableView() {
@@ -203,16 +268,61 @@ class RouteDetailViewController: UIViewController {
     private func updateUI(with detail: BusRouteDetail) {
         directionLabel.text = detail.displayDirection
         
-        if let duration = detail.estimatedDuration {
-            durationLabel.text = "預計行程時間: \(duration)分鐘"
+        // Only show operating hours if it's real data from API, not dummy data
+        var hasRealInfo = false
+        
+        if let hours = detail.operatingHours, !hours.isEmpty && hours != "N/A" {
+            durationLabel.text = hours
+            hasRealInfo = true
         }
         
-        if let hours = detail.operatingHours {
-            durationLabel.text = (durationLabel.text ?? "") + " • \(hours)"
+        // Hide duration label if no real info available
+        if !hasRealInfo {
+            durationLabel.text = ""
+            durationLabel.isHidden = true
+        } else {
+            durationLabel.isHidden = false
         }
         
-        // Check if any stop is already in favorites
-        checkIfAnyStopIsFavorite()
+        // Update direction button state based on available directions
+        updateDirectionButtonState()
+        
+        // Check for nearest stop and auto-load ETA
+        print("📍 Route detail loaded, trying auto-expand. Location: \(currentLocation?.description ?? "nil"), hasAutoLoaded: \(hasAutoLoadedNearestStop)")
+        tryAutoExpandNearestStop()
+    }
+    
+    private func updateDirectionButtonState() {
+        fetchAvailableDirections { [weak self] directions in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                if directions.count <= 1 {
+                    // Hide swap icon for single direction routes or routes with no direction data
+                    self.directionIcon.isHidden = true
+                    self.headerButton.isUserInteractionEnabled = false
+                    
+                    // Check if it's a circular route (origin == destination)
+                    if let routeDetail = self.routeDetail,
+                       let firstStop = routeDetail.stops.first,
+                       let lastStop = routeDetail.stops.last,
+                       firstStop.displayName == lastStop.displayName {
+                        // Keep icon hidden for circular routes, just add text
+                        // Add "循環線" text to direction label
+                        let currentText = self.directionLabel.text ?? ""
+                        if !currentText.contains("循環線") {
+                            self.directionLabel.text = currentText + " (循環線)"
+                        }
+                    }
+                } else {
+                    // Show swap icon for multi-direction routes
+                    self.directionIcon.isHidden = false
+                    self.directionIcon.image = UIImage(systemName: "arrow.up.arrow.down")
+                    self.directionIcon.tintColor = UIColor.label
+                    self.headerButton.isUserInteractionEnabled = true
+                }
+            }
+        }
     }
     
     private func showLoadingState() {
@@ -234,110 +344,297 @@ class RouteDetailViewController: UIViewController {
         directionLabel.text = "載入失敗: \(error.localizedDescription)"
     }
     
+    // MARK: - Location Timeout Handling
+    private func handleLocationTimeout() {
+        print("📍 Location request timed out, attempting fallback")
+        locationTimer?.invalidate()
+        locationTimer = nil
+        
+        // Try one more location request
+        if CLLocationManager.locationServicesEnabled() && 
+           (locationManager.authorizationStatus == .authorizedWhenInUse || 
+            locationManager.authorizationStatus == .authorizedAlways) {
+            print("📍 Making fallback location request")
+            locationManager.requestLocation()
+        }
+    }
+    
+    // MARK: - Auto-Expand Coordination
+    private func tryAutoExpandNearestStop() {
+        // Only try if we have route detail
+        guard let detail = routeDetail else {
+            print("📍 No route detail available for auto-expand")
+            return
+        }
+        
+        // If location is available, proceed immediately
+        if currentLocation != nil {
+            checkAndLoadNearestStopETA(for: detail)
+        } else {
+            // If no location yet, request it again
+            print("📍 No location available, requesting location for auto-expand")
+            if CLLocationManager.locationServicesEnabled() && 
+               (locationManager.authorizationStatus == .authorizedWhenInUse || 
+                locationManager.authorizationStatus == .authorizedAlways) {
+                locationManager.requestLocation()
+            }
+        }
+    }
+    
+    // MARK: - Nearest Stop Auto-Loading
+    private func checkAndLoadNearestStopETA(for detail: BusRouteDetail) {
+        guard let currentLocation = currentLocation else {
+            print("📍 No current location available for nearest stop check")
+            return
+        }
+        
+        // Only auto-load once per route detail view
+        guard !hasAutoLoadedNearestStop else {
+            print("📍 Already auto-loaded nearest stop, skipping")
+            return
+        }
+        
+        print("📍 Checking nearest stop from \(detail.stops.count) stops")
+        
+        var nearestStop: BusStop?
+        var nearestDistance: Double = Double.infinity
+        var nearestIndex: Int = 0
+        
+        for (index, stop) in detail.stops.enumerated() {
+            // Skip stops without valid coordinates
+            guard let latitude = stop.latitude, 
+                  let longitude = stop.longitude,
+                  latitude.isFinite && longitude.isFinite,
+                  latitude >= -90 && latitude <= 90,
+                  longitude >= -180 && longitude <= 180 else {
+                print("📍 Skipping stop \(stop.displayName) - invalid coordinates: lat=\(stop.latitude?.description ?? "nil"), lng=\(stop.longitude?.description ?? "nil")")
+                continue
+            }
+            
+            let stopLocation = CLLocation(latitude: latitude, longitude: longitude)
+            let distance = currentLocation.distance(from: stopLocation)
+            
+            // Validate distance calculation
+            guard distance.isFinite && distance >= 0 else {
+                print("📍 Skipping stop \(stop.displayName) - invalid distance calculation: \(distance)")
+                continue
+            }
+            
+            if distance < nearestDistance {
+                nearestDistance = distance
+                nearestStop = stop
+                nearestIndex = index
+            }
+        }
+        
+        // Check if nearest stop is within 1000m
+        if let stop = nearestStop, nearestDistance.isFinite && nearestDistance <= 1000 {
+            let distanceInt = Int(nearestDistance.rounded())
+            print("📍 Found nearest stop: \(stop.displayName) at \(distanceInt)m")
+            
+            // Mark that we've auto-loaded
+            hasAutoLoadedNearestStop = true
+            
+            // Auto-load ETA for the nearest stop in-cell with minimal delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                print("📍 Auto-loading ETA for nearest stop at index \(nearestIndex)")
+                self.expandedStopIndex = nearestIndex
+                
+                // Reload data and animate height changes
+                self.tableView.beginUpdates()
+                self.tableView.reloadData()
+                self.tableView.endUpdates()
+                
+                // Scroll to that stop immediately after table update
+                let indexPath = IndexPath(row: nearestIndex, section: 0)
+                self.tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+                
+                // Load ETA immediately after scroll starts
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if let cell = self.tableView.cellForRow(at: indexPath) as? RouteStopTableViewCell {
+                        print("📍 Triggering ETA load for cell")
+                        cell.loadAndShowETA(forceRefresh: true) // Auto-expand bypasses cooldown
+                        // Start auto-refresh timer for auto-expanded stop
+                        self.startETARefreshTimer()
+                    } else {
+                        print("📍 Cell not found for ETA loading")
+                    }
+                }
+            }
+        } else {
+            if nearestDistance.isFinite {
+                let distanceInt = Int(nearestDistance.rounded())
+                print("📍 Nearest stop is \(distanceInt)m away (beyond 1000m limit)")
+            } else {
+                print("📍 No valid stops found with finite distance calculations")
+            }
+        }
+    }
+    
+    
     // MARK: - Favorites Management
-    private func checkFavoriteStatus() {
-        // Since we don't have a stopId yet, we'll handle this when route detail loads
-        // For now, assume it's not a favorite
-        isFavorite = false
-        updateFavoriteButton()
-    }
-    
-    private func updateFavoriteButton() {
-        favoriteButton.isSelected = isFavorite
-        
-        // Add subtle animation
-        UIView.animate(withDuration: 0.2) {
-            self.favoriteButton.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
-        } completion: { _ in
-            UIView.animate(withDuration: 0.1) {
-                self.favoriteButton.transform = .identity
-            }
-        }
-    }
-    
-    @objc private func favoriteButtonTapped() {
-        // Show action sheet to let user choose which stop to add to favorites
-        showStopSelectionForFavorites()
-    }
-    
-    private func showStopSelectionForFavorites() {
-        guard let routeDetail = routeDetail else { return }
-        
-        let actionSheet = UIAlertController(
-            title: "加入我的最愛",
-            message: "請選擇要加入我的最愛的巴士站，將會收藏此站點的 \(company.rawValue) \(routeNumber) 路線到站時間",
-            preferredStyle: .actionSheet
-        )
-        
-        // Add each stop as an option
-        for stop in routeDetail.stops {
-            let actionTitle = "\(stop.sequence). \(stop.displayName)"
-            let action = UIAlertAction(title: actionTitle, style: .default) { _ in
-                self.addStopToFavorites(stop: stop, routeDetail: routeDetail)
-            }
-            actionSheet.addAction(action)
-        }
-        
-        actionSheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        
-        // For iPad
-        if let popover = actionSheet.popoverPresentationController {
-            popover.sourceView = favoriteButton
-            popover.sourceRect = favoriteButton.bounds
-        }
-        
-        present(actionSheet, animated: true)
-    }
-    
-    private func addStopToFavorites(stop: BusStop, routeDetail: BusRouteDetail) {
+    private func toggleFavorite(for stop: BusStop, routeNumber: String, company: BusRoute.Company, direction: String) {
         let busRoute = BusRoute(
             stopId: stop.stopId,
-            route: routeDetail.routeNumber,
-            companyId: routeDetail.company.rawValue,
-            direction: routeDetail.direction,
-            subTitle: "在 \(stop.displayName)"
+            route: routeNumber,
+            companyId: company.rawValue,
+            direction: direction,
+            subTitle: stop.displayName
         )
         
-        if favoritesManager.isFavorite(busRoute) {
-            // Show already exists message
-            showMessage("此站點的 \(routeDetail.company.rawValue) \(routeDetail.routeNumber) 路線已在我的最愛中", isError: false)
+        let isFavorite = favoritesManager.isFavorite(busRoute)
+        
+        if isFavorite {
+            favoritesManager.removeFavorite(busRoute)
         } else {
-            favoritesManager.addFavorite(busRoute, subTitle: "在 \(stop.displayName)")
-            showMessage("已將 \(stop.displayName) 的 \(routeDetail.company.rawValue) \(routeDetail.routeNumber) 路線加入我的最愛", isError: false)
-            
-            // Update favorite status for any matching stops
-            checkIfAnyStopIsFavorite()
-        }
-    }
-    
-    private func checkIfAnyStopIsFavorite() {
-        guard let routeDetail = routeDetail else { return }
-        
-        // Check if any stop in this route is already a favorite
-        for stop in routeDetail.stops {
-            let busRoute = BusRoute(
-                stopId: stop.stopId,
-                route: routeDetail.routeNumber,
-                companyId: routeDetail.company.rawValue,
-                direction: routeDetail.direction,
-                subTitle: ""
-            )
-            
-            if favoritesManager.isFavorite(busRoute) {
-                isFavorite = true
-                updateFavoriteButton()
-                return
-            }
+            favoritesManager.addFavorite(busRoute, subTitle: stop.displayName)
         }
         
-        isFavorite = false
-        updateFavoriteButton()
+        // Reload the cell to update favorite state
+        if let routeDetail = routeDetail,
+           let stopIndex = routeDetail.stops.firstIndex(where: { $0.stopId == stop.stopId }) {
+            let indexPath = IndexPath(row: stopIndex, section: 0)
+            tableView.reloadRows(at: [indexPath], with: .none)
+        }
     }
     
     private func showMessage(_ message: String, isError: Bool) {
         let alert = UIAlertController(title: isError ? "錯誤" : "成功", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "確定", style: .default))
         present(alert, animated: true)
+    }
+    
+    // MARK: - Direction Switching
+    @objc private func directionButtonTapped() {
+        // First, fetch available directions to determine if button should be interactive
+        fetchAvailableDirections { [weak self] directions in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                if directions.isEmpty {
+                    self.showMessage("無法獲取路線方向資訊", isError: true)
+                    return
+                }
+                
+                // Check if this is a single direction route
+                if directions.count == 1 {
+                    // Do nothing for single direction routes
+                    return
+                }
+                
+                // If only 2 directions, automatically switch to the other one
+                if directions.count == 2 {
+                    if let otherDirection = directions.first(where: { $0.direction != self.direction }) {
+                        self.switchToDirection(otherDirection.direction)
+                        return
+                    }
+                }
+                
+                // If more than 2 directions, show selection alert
+                self.showDirectionSelectionAlert(directions: directions)
+            }
+        }
+    }
+    
+    private func showDirectionSelectionAlert(directions: [DirectionInfo]) {
+        let alert = UIAlertController(title: "選擇方向", message: "請選擇要查看的路線方向", preferredStyle: .actionSheet)
+        
+        // Add direction options
+        for direction in directions {
+            let action = UIAlertAction(title: direction.displayText, style: .default) { _ in
+                self.switchToDirection(direction.direction)
+            }
+            
+            // Mark current direction
+            if direction.direction == self.direction {
+                action.setValue(UIImage(systemName: "checkmark"), forKey: "image")
+            }
+            
+            alert.addAction(action)
+        }
+        
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+                
+        // For iPad
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = self.headerButton
+            popover.sourceRect = self.headerButton.bounds
+            popover.permittedArrowDirections = [.up]
+        }
+        
+        self.present(alert, animated: true)
+    }
+    
+    private func fetchAvailableDirections(completion: @escaping ([DirectionInfo]) -> Void) {
+        apiService.searchRoutes(routeNumber: routeNumber) { result in
+            switch result {
+            case .success(let searchResults):
+                // Find matching route
+                if let matchingRoute = searchResults.first(where: { 
+                    $0.routeNumber == self.routeNumber && $0.company == self.company 
+                }) {
+                    completion(matchingRoute.directions)
+                } else {
+                    completion([])
+                }
+            case .failure(_):
+                completion([])
+            }
+        }
+    }
+    
+    private func switchToDirection(_ newDirection: String) {
+        // Fade out current content
+        UIView.animate(withDuration: 0.2, animations: {
+            self.view.alpha = 0.5
+        }) { _ in
+            // Create new RouteDetailViewController with different direction
+            let newRouteDetailVC = RouteDetailViewController(
+                routeNumber: self.routeNumber,
+                company: self.company,
+                direction: newDirection
+            )
+            
+            // Set initial alpha for fade in effect
+            newRouteDetailVC.view.alpha = 0.0
+            
+            // Replace current view controller without animation
+            if let navigationController = self.navigationController {
+                var viewControllers = navigationController.viewControllers
+                viewControllers[viewControllers.count - 1] = newRouteDetailVC
+                navigationController.setViewControllers(viewControllers, animated: false)
+                
+                // Fade in new content
+                UIView.animate(withDuration: 0.3, delay: 0.1, options: .curveEaseInOut) {
+                    newRouteDetailVC.view.alpha = 1.0
+                }
+            }
+        }
+    }
+    
+    // MARK: - ETA Auto-Refresh
+    private func startETARefreshTimer() {
+        stopETARefreshTimer() // Clear any existing timer
+        
+        etaRefreshTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            self?.refreshExpandedStopETA()
+        }
+    }
+    
+    private func stopETARefreshTimer() {
+        etaRefreshTimer?.invalidate()
+        etaRefreshTimer = nil
+    }
+    
+    private func refreshExpandedStopETA() {
+        guard let expandedIndex = expandedStopIndex,
+              let indexPath = IndexPath(row: expandedIndex, section: 0) as IndexPath?,
+              let cell = tableView.cellForRow(at: indexPath) as? RouteStopTableViewCell else {
+            return
+        }
+        
+        print("🔄 Auto-refreshing ETA for expanded stop at index \(expandedIndex)")
+        cell.loadAndShowETA(forceRefresh: true) // Auto-refresh bypasses cooldown
     }
     
     // MARK: - Helper Methods
@@ -359,7 +656,8 @@ extension RouteDetailViewController: UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         guard let cell = tableView.dequeueReusableCell(withIdentifier: RouteStopTableViewCell.identifier, for: indexPath) as? RouteStopTableViewCell,
-              let stops = routeDetail?.stops else {
+              let stops = routeDetail?.stops,
+              let routeDetail = routeDetail else {
             return UITableViewCell()
         }
         
@@ -368,6 +666,31 @@ extension RouteDetailViewController: UITableViewDataSource {
         let isLast = indexPath.row == stops.count - 1
         
         cell.configure(with: stop, isFirst: isFirst, isLast: isLast)
+        cell.setRouteInfo(routeNumber: routeDetail.routeNumber, company: routeDetail.company, direction: routeDetail.direction)
+        
+        // Set favorite state 
+        let busRoute = BusRoute(
+            stopId: stop.stopId,
+            route: routeDetail.routeNumber,
+            companyId: routeDetail.company.rawValue,
+            direction: routeDetail.direction,
+            subTitle: stop.displayName
+        )
+        let isFavorite = favoritesManager.isFavorite(busRoute)
+        cell.setFavoriteState(isFavorite)
+        
+        // Set favorite toggle callback
+        cell.onFavoriteToggle = { [weak self] in
+            self?.toggleFavorite(for: stop, routeNumber: routeDetail.routeNumber, company: routeDetail.company, direction: routeDetail.direction)
+        }
+        
+        // Check if this stop should show ETA
+        if expandedStopIndex == indexPath.row {
+            cell.loadAndShowETA()
+        } else {
+            cell.hideETA()
+        }
+        
         return cell
     }
 }
@@ -375,17 +698,52 @@ extension RouteDetailViewController: UITableViewDataSource {
 // MARK: - UITableViewDelegate
 extension RouteDetailViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 70
+        // Expand height when ETA is showing
+        if expandedStopIndex == indexPath.row {
+            return 100
+        } else {
+            return 70
+        }
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         
-        guard let routeDetail = routeDetail else { return }
-        let stop = routeDetail.stops[indexPath.row]
+        let previousExpandedIndex = expandedStopIndex
         
-        // Navigate to stop ETA view with animation
-        showStopETA(stop: stop, routeDetail: routeDetail)
+        // Handle tap behavior for expanded/collapsed stops
+        if expandedStopIndex == indexPath.row {
+            // If already expanded, refresh ETA data instead of collapsing
+            if let cell = tableView.cellForRow(at: indexPath) as? RouteStopTableViewCell {
+                cell.loadAndShowETA()
+                // Restart the refresh timer for continued auto-refresh
+                startETARefreshTimer()
+            }
+            return // Don't collapse, just refresh
+        } else {
+            // Stop previous timer if any
+            stopETARefreshTimer()
+            // Show ETA for this stop, hide others
+            expandedStopIndex = indexPath.row
+            // Start auto-refresh timer for new expanded stop
+            startETARefreshTimer()
+        }
+        
+        // Collect all cells that need to be reloaded
+        var indexPathsToReload: [IndexPath] = []
+        
+        // Always reload the tapped cell
+        indexPathsToReload.append(indexPath)
+        
+        // If there was a previously expanded stop and it's different, reload that too
+        if let previousIndex = previousExpandedIndex, previousIndex != indexPath.row {
+            indexPathsToReload.append(IndexPath(row: previousIndex, section: 0))
+        }
+        
+        // Use begin/end updates for smooth height animation
+        tableView.beginUpdates()
+        tableView.reloadRows(at: indexPathsToReload, with: .fade)
+        tableView.endUpdates()
     }
     
     private func showStopETA(stop: BusStop, routeDetail: BusRouteDetail) {
@@ -398,5 +756,50 @@ extension RouteDetailViewController: UITableViewDelegate {
         
         // Custom push transition
         navigationController?.pushViewController(stopETAVC, animated: true)
+    }
+}
+
+// MARK: - CLLocationManagerDelegate
+extension RouteDetailViewController: CLLocationManagerDelegate {
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        currentLocation = location
+        print("📍 Location updated: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        
+        // Cancel the timeout timer since we got location
+        locationTimer?.invalidate()
+        locationTimer = nil
+        
+        // If we already have route detail, try auto-expand
+        if routeDetail != nil {
+            tryAutoExpandNearestStop()
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("📍 Location error: \(error.localizedDescription)")
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        print("📍 Authorization status changed to: \(status.rawValue)")
+        switch status {
+        case .authorizedWhenInUse, .authorizedAlways:
+            print("📍 Location authorized, requesting location")
+            if CLLocationManager.locationServicesEnabled() {
+                locationManager.requestLocation()
+                
+                // Set up a backup timer with shorter timeout for faster response
+                locationTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+                    self?.handleLocationTimeout()
+                }
+            }
+        case .denied, .restricted:
+            print("📍 Location access denied")
+        case .notDetermined:
+            print("📍 Location status not determined, requesting authorization")
+            locationManager.requestWhenInUseAuthorization()
+        @unknown default:
+            break
+        }
     }
 }

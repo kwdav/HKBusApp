@@ -9,107 +9,167 @@ class BusListViewController: UIViewController {
     private var refreshTimer: Timer?
     private let apiService = BusAPIService.shared
     private let favoritesManager = FavoritesManager.shared
-    private let statusBarView = UIView()
     private let editButton = UIButton(type: .system)
     private let updateButton = UIButton(type: .system)
+    private var headerView: UIView?
     
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationController?.setNavigationBarHidden(true, animated: false)
+        // Ensure content extends under translucent bars
+        extendedLayoutIncludesOpaqueBars = true
+        edgesForExtendedLayout = .all
         setupUI()
         setupTableView()
         setupRefreshControl()
         setupEditButton()
         loadData()
         startAutoRefresh()
+
+        // Listen for font size changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(fontSizeDidChange),
+            name: FontSizeManager.fontSizeDidChangeNotification,
+            object: nil
+        )
     }
-    
+
+    @objc private func fontSizeDidChange() {
+        // Reload table view to apply new font sizes
+        tableView.reloadData()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+
+        // Don't set scroll indicator insets - let it follow content insets
+        // The scroll indicator will automatically align with the scrollable content area
+    }
+
     deinit {
         refreshTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
     }
     
     private func setupUI() {
-        // Black background for consistency
-        view.backgroundColor = UIColor.black
+        // Adaptive background for light/dark mode
+        view.backgroundColor = UIColor.systemBackground
         
-        // Setup table view to go under status bar
+        // Setup table view to go under status bar and tab bar
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
         
-        // Setup status bar overlay
-        statusBarView.backgroundColor = UIColor.black.withAlphaComponent(0.8)
-        statusBarView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(statusBarView)
-        
-        // Create header view for edit button
-        let headerView = UIView(frame: CGRect(x: 0, y: 0, width: view.frame.width, height: 44))
-        headerView.backgroundColor = UIColor.clear
-        
-        // Setup update button in header (left side) with long press for attribution
-        updateButton.setTitle("🔄", for: .normal)
-        updateButton.titleLabel?.font = UIFont.systemFont(ofSize: 18)
-        updateButton.setTitleColor(.white, for: .normal)
-        updateButton.addTarget(self, action: #selector(updateStopData), for: .touchUpInside)
-        updateButton.translatesAutoresizingMaskIntoConstraints = false
-        headerView.addSubview(updateButton)
-        
-        // Add long press gesture for showing attribution
-        let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(showAttribution))
-        longPressGesture.minimumPressDuration = 1.0
-        updateButton.addGestureRecognizer(longPressGesture)
-        
-        // Setup edit button in header (right side)
-        editButton.setTitle("編輯", for: .normal)
-        editButton.titleLabel?.font = UIFont.systemFont(ofSize: 17)
-        editButton.setTitleColor(.white, for: .normal)
-        editButton.addTarget(self, action: #selector(toggleEditMode), for: .touchUpInside)
-        editButton.translatesAutoresizingMaskIntoConstraints = false
-        headerView.addSubview(editButton)
-        
+        // Table view should fill entire screen to go under translucent bars
         NSLayoutConstraint.activate([
-            updateButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            updateButton.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 16),
-            
-            editButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            editButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -16)
-        ])
-        
-        tableView.tableHeaderView = headerView
-        
-        let statusBarHeight = view.window?.windowScene?.statusBarManager?.statusBarFrame.height ?? 44
-        
-        NSLayoutConstraint.activate([
-            // Table view goes full screen
             tableView.topAnchor.constraint(equalTo: view.topAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
-            // Status bar overlay
-            statusBarView.topAnchor.constraint(equalTo: view.topAnchor),
-            statusBarView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            statusBarView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            statusBarView.heightAnchor.constraint(equalToConstant: statusBarHeight)
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        
+        // Get status bar height first
+        let statusBarHeight = view.window?.windowScene?.statusBarManager?.statusBarFrame.height ?? 44
+
+        // Create fixed header view with blur background for buttons
+        let buttonTopPadding: CGFloat = 8
+        let buttonHeight: CGFloat = 28
+        let buttonBottomPadding: CGFloat = 8
+        let buttonAreaHeight = buttonTopPadding + buttonHeight + buttonBottomPadding
+        let header = UIView()
+        header.backgroundColor = UIColor.clear
+        header.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(header)
+        self.headerView = header  // Store reference for later use
+
+        // Add blur effect to header view
+        let headerBlurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+        headerBlurView.translatesAutoresizingMaskIntoConstraints = false
+        header.addSubview(headerBlurView)
+
+        // Setup settings button in header (left side)
+        updateButton.setTitle("⚙️", for: .normal)
+        updateButton.titleLabel?.font = UIFont.systemFont(ofSize: 18)
+        updateButton.setTitleColor(UIColor.label, for: .normal)
+        updateButton.addTarget(self, action: #selector(openSettings), for: .touchUpInside)
+        updateButton.translatesAutoresizingMaskIntoConstraints = false
+        headerBlurView.contentView.addSubview(updateButton)
+
+        // Setup edit button in header (right side)
+        editButton.setTitle("編輯", for: .normal)
+        editButton.titleLabel?.font = UIFont.systemFont(ofSize: 17)
+        editButton.setTitleColor(UIColor.label, for: .normal)
+        editButton.addTarget(self, action: #selector(toggleEditMode), for: .touchUpInside)
+        editButton.translatesAutoresizingMaskIntoConstraints = false
+        headerBlurView.contentView.addSubview(editButton)
+
+        // No extra padding - section headers will stick directly below buttons
+        let blurExtension: CGFloat = 0
+
+        NSLayoutConstraint.activate([
+            // Fix header view to top of screen
+            header.topAnchor.constraint(equalTo: view.topAnchor),
+            header.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            header.heightAnchor.constraint(equalToConstant: statusBarHeight + buttonAreaHeight + blurExtension),
+
+            // Blur view extends beyond header view to cover section headers
+            headerBlurView.topAnchor.constraint(equalTo: header.topAnchor),
+            headerBlurView.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+            headerBlurView.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+            headerBlurView.bottomAnchor.constraint(equalTo: header.bottomAnchor),
+
+            // Position buttons below status bar with top padding
+            updateButton.topAnchor.constraint(equalTo: header.topAnchor, constant: statusBarHeight + buttonTopPadding),
+            updateButton.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
+
+            editButton.topAnchor.constraint(equalTo: header.topAnchor, constant: statusBarHeight + buttonTopPadding),
+            editButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16)
         ])
     }
     
     private func setupTableView() {
         tableView.delegate = self
         tableView.dataSource = self
-        tableView.backgroundColor = UIColor.black
+        tableView.backgroundColor = UIColor.systemBackground
         tableView.separatorStyle = .none
+        // Disable automatic content inset adjustment to have full control
         tableView.contentInsetAdjustmentBehavior = .never
-        // Add bottom inset for tab bar
+
+        // Remove default spacing above section headers (iOS 15+)
+        if #available(iOS 15.0, *) {
+            tableView.sectionHeaderTopPadding = 0
+        }
+
+        // Add top and bottom content inset to avoid header and tab bar covering content
+        let statusBarHeight = view.window?.windowScene?.statusBarManager?.statusBarFrame.height ?? 44
+        let buttonTopPadding: CGFloat = 8
+        let buttonHeight: CGFloat = 28
+        let buttonBottomPadding: CGFloat = 8
+        let buttonAreaHeight = buttonTopPadding + buttonHeight + buttonBottomPadding
+        let blurExtension: CGFloat = 0
+        let totalHeaderHeight = statusBarHeight + buttonAreaHeight
+
+        // Get tab bar height to add bottom inset
         let tabBarHeight = tabBarController?.tabBar.frame.height ?? 49
-        tableView.contentInset = UIEdgeInsets(top: 44, left: 0, bottom: tabBarHeight, right: 0)
-        tableView.scrollIndicatorInsets = tableView.contentInset
+
+        tableView.contentInset = UIEdgeInsets(top: totalHeaderHeight, left: 0, bottom: tabBarHeight, right: 0)
+        // Scroll indicator should have NO insets because content is already offset
+        // The scrollable range is defined by contentInset, not scrollIndicatorInsets
+        tableView.scrollIndicatorInsets = .zero
+        tableView.verticalScrollIndicatorInsets = .zero
+        tableView.showsVerticalScrollIndicator = true
         tableView.register(BusETATableViewCell.self, forCellReuseIdentifier: BusETATableViewCell.identifier)
         tableView.register(UITableViewHeaderFooterView.self, forHeaderFooterViewReuseIdentifier: "SectionHeader")
     }
     
     private func setupRefreshControl() {
         refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
-        refreshControl.tintColor = UIColor.systemBlue
+        refreshControl.tintColor = UIColor.label
+        refreshControl.attributedTitle = NSAttributedString(
+            string: "更新路線",
+            attributes: [.foregroundColor: UIColor.label, .font: UIFont.systemFont(ofSize: 14)]
+        )
         tableView.refreshControl = refreshControl
     }
     
@@ -139,7 +199,7 @@ class BusListViewController: UIViewController {
         
         let addButton = UIButton(type: .system)
         addButton.setTitle("+ 新增分類", for: .normal)
-        addButton.setTitleColor(.white, for: .normal)
+        addButton.setTitleColor(UIColor.label, for: .normal)
         addButton.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .medium)
         addButton.addTarget(self, action: #selector(addNewSection), for: .touchUpInside)
         addButton.translatesAutoresizingMaskIntoConstraints = false
@@ -326,82 +386,10 @@ class BusListViewController: UIViewController {
     @objc private func handleRefresh() {
         loadData()
     }
-    
-    @objc private func updateStopData() {
-        // Prevent multiple simultaneous updates
-        updateButton.isEnabled = false
-        updateButton.setTitle("⏳", for: .normal)
-        
-        print("🔄 用戶手動觸發站點數據更新...")
-        
-        StopDataManager.shared.forceUpdateData { [weak self] result in
-            DispatchQueue.main.async {
-                self?.updateButton.isEnabled = true
-                self?.updateButton.setTitle("🔄", for: .normal)
-                
-                switch result {
-                case .success(let stopData):
-                    print("✅ 站點數據更新成功，共 \(stopData.stopList.count) 個站點")
-                    
-                    // Show success feedback to user
-                    let alert = UIAlertController(
-                        title: "更新成功",
-                        message: "站點資料已更新至最新版本\n包含 \(stopData.stopList.count) 個巴士站",
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "確定", style: .default))
-                    self?.present(alert, animated: true)
-                    
-                case .failure(let error):
-                    print("❌ 站點數據更新失敗: \(error.localizedDescription)")
-                    
-                    // Show error feedback to user
-                    let alert = UIAlertController(
-                        title: "更新失敗",
-                        message: "無法更新站點資料，請檢查網路連線並稍後再試",
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "確定", style: .default))
-                    self?.present(alert, animated: true)
-                }
-            }
-        }
-    }
-    
-    @objc private func showAttribution() {
-        guard let lastUpdate = StopDataManager.shared.getLastUpdateTime() else {
-            return
-        }
-        
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        formatter.locale = Locale(identifier: "zh_Hant_HK")
-        
-        let updateTimeString = formatter.string(from: lastUpdate)
-        
-        let alert = UIAlertController(
-            title: "關於站點數據",
-            message: """
-            📊 數據來源：HK Bus Crawling@2021
-            🔗 GitHub: github.com/hkbus/hk-bus-crawling
-            📜 授權：GPL-2.0 License
-            
-            🕐 最後更新：\(updateTimeString)
-            
-            感謝 hk-bus-crawling 項目提供完整的香港巴士站點資料。
-            """,
-            preferredStyle: .alert
-        )
-        
-        alert.addAction(UIAlertAction(title: "訪問 GitHub", style: .default) { _ in
-            if let url = URL(string: "https://github.com/hkbus/hk-bus-crawling") {
-                UIApplication.shared.open(url)
-            }
-        })
-        
-        alert.addAction(UIAlertAction(title: "確定", style: .cancel))
-        present(alert, animated: true)
+
+    @objc private func openSettings() {
+        let settingsVC = SettingsViewController()
+        navigationController?.pushViewController(settingsVC, animated: true)
     }
     
     private func loadData() {
@@ -509,9 +497,13 @@ extension BusListViewController: UITableViewDataSource {
         guard let cell = tableView.dequeueReusableCell(withIdentifier: BusETATableViewCell.identifier, for: indexPath) as? BusETATableViewCell else {
             return UITableViewCell()
         }
-        
+
         let displayData = groupedData[indexPath.section].routes[indexPath.row]
         cell.configure(with: displayData)
+
+        // Hide star button in "My" page (all routes are already favorites)
+        cell.setStarButtonVisible(false)
+
         return cell
     }
 }
@@ -523,12 +515,12 @@ extension BusListViewController: UITableViewDelegate {
     }
     
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
-        return 25
+        return 32
     }
     
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         let headerView = UIView()
-        headerView.backgroundColor = UIColor(white: 0.15, alpha: 1.0) // Softer than 0.2
+        headerView.backgroundColor = UIColor.secondarySystemBackground // Adaptive for light/dark mode
         
         // Add long press gesture for reordering sections
         if tableView.isEditing {
@@ -537,11 +529,11 @@ extension BusListViewController: UITableViewDelegate {
             headerView.tag = section
         }
         
-        // Add subtle gradient effect
+        // Add subtle gradient effect that adapts to light/dark mode
         let gradientLayer = CAGradientLayer()
         gradientLayer.colors = [
-            UIColor(white: 0.18, alpha: 1.0).cgColor,
-            UIColor(white: 0.12, alpha: 1.0).cgColor
+            UIColor.tertiarySystemBackground.cgColor,
+            UIColor.secondarySystemBackground.cgColor
         ]
         gradientLayer.locations = [0.0, 1.0]
         gradientLayer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 32)
@@ -550,11 +542,11 @@ extension BusListViewController: UITableViewDelegate {
         let label = UILabel()
         label.text = groupedData[section].subtitle
         label.font = UIFont.systemFont(ofSize: 13, weight: .medium)
-        label.textColor = UIColor(white: 0.9, alpha: 1.0)
+        label.textColor = UIColor.label
         label.translatesAutoresizingMaskIntoConstraints = false
         
         // Add subtle shadow for depth
-        label.layer.shadowColor = UIColor.black.cgColor
+        label.layer.shadowColor = UIColor.label.cgColor
         label.layer.shadowOffset = CGSize(width: 0, height: 1)
         label.layer.shadowOpacity = 0.3
         label.layer.shadowRadius = 1
@@ -565,7 +557,7 @@ extension BusListViewController: UITableViewDelegate {
             // Add edit and delete buttons in edit mode
             let editButton = UIButton(type: .system)
             editButton.setTitle("編輯", for: .normal)
-            editButton.setTitleColor(.white, for: .normal)
+            editButton.setTitleColor(UIColor.label, for: .normal)
             editButton.titleLabel?.font = UIFont.systemFont(ofSize: 12, weight: .medium)
             editButton.tag = section
             editButton.addTarget(self, action: #selector(editSectionTitle(_:)), for: .touchUpInside)
@@ -627,27 +619,58 @@ extension BusListViewController: UITableViewDelegate {
         }
     }
     
+    
     func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
         return true
     }
     
     func tableView(_ tableView: UITableView, moveRowAt sourceIndexPath: IndexPath, to destinationIndexPath: IndexPath) {
-        // Handle reordering within the same section
-        if sourceIndexPath.section == destinationIndexPath.section {
-            var sectionData = groupedData[sourceIndexPath.section].routes
-            let movedItem = sectionData.remove(at: sourceIndexPath.row)
-            sectionData.insert(movedItem, at: destinationIndexPath.row)
-            
-            // Update the grouped data
-            groupedData[sourceIndexPath.section] = (
-                subtitle: groupedData[sourceIndexPath.section].subtitle,
-                routes: sectionData
+        // Get the item being moved
+        let movedItem = groupedData[sourceIndexPath.section].routes[sourceIndexPath.row]
+
+        // Remove from source section
+        var sourceSectionData = groupedData[sourceIndexPath.section].routes
+        sourceSectionData.remove(at: sourceIndexPath.row)
+        groupedData[sourceIndexPath.section] = (
+            subtitle: groupedData[sourceIndexPath.section].subtitle,
+            routes: sourceSectionData
+        )
+
+        // If moved to different section, update the subtitle in Core Data and create new route object
+        var itemToInsert = movedItem
+        if sourceIndexPath.section != destinationIndexPath.section {
+            let newSubTitle = groupedData[destinationIndexPath.section].subtitle
+            favoritesManager.updateFavoriteSubTitle(movedItem.route, newSubTitle: newSubTitle)
+
+            // Create a new BusRoute with updated subtitle (struct is immutable)
+            let updatedRoute = BusRoute(
+                stopId: movedItem.route.stopId,
+                route: movedItem.route.route,
+                companyId: movedItem.route.companyId,
+                direction: movedItem.route.direction,
+                subTitle: newSubTitle
             )
-            
-            // Save the new order
-            let allRoutes = groupedData.flatMap { $0.routes.map { $0.route } }
-            favoritesManager.updateFavoriteOrder(allRoutes)
+
+            // Create updated BusDisplayData with new route
+            itemToInsert = BusDisplayData(
+                route: updatedRoute,
+                stopName: movedItem.stopName,
+                destination: movedItem.destination,
+                etas: movedItem.etas
+            )
         }
+
+        // Insert into destination section
+        var destinationSectionData = groupedData[destinationIndexPath.section].routes
+        destinationSectionData.insert(itemToInsert, at: destinationIndexPath.row)
+        groupedData[destinationIndexPath.section] = (
+            subtitle: groupedData[destinationIndexPath.section].subtitle,
+            routes: destinationSectionData
+        )
+
+        // Save the new order for all routes
+        let allRoutes = groupedData.flatMap { $0.routes.map { $0.route } }
+        favoritesManager.updateFavoriteOrder(allRoutes)
     }
     
     func tableView(_ tableView: UITableView, editingStyleForRowAt indexPath: IndexPath) -> UITableViewCell.EditingStyle {

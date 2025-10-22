@@ -8,6 +8,8 @@ class StopSearchViewController: UIViewController {
     // MARK: - Properties
     private let searchBar = UISearchBar()
     private let tableView = UITableView(frame: .zero, style: .grouped)
+    private let searchBarBackgroundView = UIView()
+    private let refreshControl = UIRefreshControl()
     private let apiService = BusAPIService.shared
     private let favoritesManager = FavoritesManager.shared
     private let locationManager = CLLocationManager()
@@ -24,12 +26,20 @@ class StopSearchViewController: UIViewController {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        // Ensure content extends under translucent bars
+        extendedLayoutIncludesOpaqueBars = true
+        edgesForExtendedLayout = .all
         setupUI()
         setupSearchBar()
         setupTableView()
         setupTapGesture()
         setupLocationManager()
         requestLocationAndLoadNearbyStops()
+    }
+    
+    // Show status bar to display clock and battery
+    override var prefersStatusBarHidden: Bool {
+        return false
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -45,19 +55,27 @@ class StopSearchViewController: UIViewController {
     private func setupUI() {
         view.backgroundColor = UIColor.systemBackground
         
+        // Search bar background with clean iOS-style appearance
+        searchBarBackgroundView.backgroundColor = UIColor.systemBackground
+        searchBarBackgroundView.translatesAutoresizingMaskIntoConstraints = false
+        
         // Search bar
         searchBar.placeholder = "搜尋站點..."
         searchBar.searchBarStyle = .minimal
         searchBar.tintColor = UIColor.label
+        searchBar.backgroundColor = UIColor.systemBackground
         searchBar.barTintColor = UIColor.systemBackground
         searchBar.showsCancelButton = false  // Initially hidden, will show when text is entered
         searchBar.autocapitalizationType = .none
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         
-        // Customize search bar appearance for both light and dark mode
+        // Customize search bar appearance for clean visibility
         if let textField = searchBar.value(forKey: "searchField") as? UITextField {
             textField.textColor = UIColor.label
             textField.backgroundColor = UIColor.secondarySystemBackground
+            textField.layer.cornerRadius = 10
+            textField.layer.borderWidth = 0.5
+            textField.layer.borderColor = UIColor.separator.cgColor
         }
         
         // Customize Cancel button text
@@ -69,19 +87,28 @@ class StopSearchViewController: UIViewController {
         tableView.sectionHeaderTopPadding = 0 // Reduce top padding for iOS 15+
         tableView.translatesAutoresizingMaskIntoConstraints = false
         
-        view.addSubview(searchBar)
         view.addSubview(tableView)
+        view.addSubview(searchBarBackgroundView)  // Add background first
+        view.addSubview(searchBar)  // Add search bar on top
         
         NSLayoutConstraint.activate([
+            // Search bar background - full width at safe area top (below status bar)
+            searchBarBackgroundView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            searchBarBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            searchBarBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            searchBarBackgroundView.heightAnchor.constraint(equalToConstant: 44),
+            
+            // Search bar - positioned at safe area top (below status bar)
             searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),  // Keep some padding for text
+            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),  // Keep some padding for text
             searchBar.heightAnchor.constraint(equalToConstant: 44),
             
-            tableView.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 8),
+            // Table view - starts below search bar with 4px spacing
+            tableView.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 4),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor) // Extend under tab bar
         ])
     }
     
@@ -94,6 +121,17 @@ class StopSearchViewController: UIViewController {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.register(StopSearchResultTableViewCell.self, forCellReuseIdentifier: StopSearchResultTableViewCell.identifier)
+        // Enable automatic content inset for translucent bars
+        tableView.contentInsetAdjustmentBehavior = .automatic
+
+        // Setup refresh control
+        refreshControl.tintColor = UIColor.label
+        refreshControl.attributedTitle = NSAttributedString(
+            string: "更新站點",
+            attributes: [.foregroundColor: UIColor.label, .font: UIFont.systemFont(ofSize: 14)]
+        )
+        refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
+        tableView.refreshControl = refreshControl
     }
     
     private func setupTapGesture() {
@@ -291,8 +329,28 @@ class StopSearchViewController: UIViewController {
             print("✅ 已顯示 \(popularStops.count) 個熱門巴士站")
         }
     }
-    
-    
+
+    @objc private func handleRefresh() {
+        print("🔄 用戶下拉刷新站點")
+
+        // Clear search results to show nearby stops
+        stopSearchResults = []
+        searchBar.text = ""
+        searchBar.setShowsCancelButton(false, animated: true)
+        isShowingNearby = true
+
+        // Force refresh nearby stops with new location
+        currentLocation = nil // Clear cached location
+
+        // Reload nearby stops
+        requestLocationAndLoadNearbyStops()
+
+        // End refresh after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.refreshControl.endRefreshing()
+        }
+    }
+
     // MARK: - Search Methods
     private func performSearch(for query: String) {
         // If query is empty, show nearby stops or popular stops if nearby is empty
@@ -307,8 +365,8 @@ class StopSearchViewController: UIViewController {
             return
         }
         
-        // Only search if query has meaningful content (at least 2 characters for stops)
-        guard query.count >= 2 else {
+        // Only search if query has meaningful content (at least 1 character for stops)
+        guard query.count >= 1 else {
             isShowingNearby = true
             stopSearchResults = []
             tableView.reloadData()
@@ -422,32 +480,12 @@ extension StopSearchViewController: UITableViewDelegate {
     }
     
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
-        if isShowingNearby && !nearbyStops.isEmpty {
-            return 32 // Reduced from default
-        }
+        // Remove headers to maximize space usage
         return 0
     }
     
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-        if isShowingNearby && !nearbyStops.isEmpty {
-            let headerView = UIView()
-            headerView.backgroundColor = UIColor.systemBackground
-            
-            let titleLabel = UILabel()
-            titleLabel.text = "附近站點"
-            titleLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
-            titleLabel.textColor = UIColor.label
-            titleLabel.translatesAutoresizingMaskIntoConstraints = false
-            
-            headerView.addSubview(titleLabel)
-            
-            NSLayoutConstraint.activate([
-                titleLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 12), // Reduced margin
-                titleLabel.bottomAnchor.constraint(equalTo: headerView.bottomAnchor, constant: -4)
-            ])
-            
-            return headerView
-        }
+        // Remove headers to maximize space usage
         return nil
     }
     

@@ -120,15 +120,29 @@ class LocalBusDataManager {
     
     func getRoutesForStop(stopId: String) -> [StopRoute] {
         guard loadBusData(), let data = busData else { return [] }
-        
+
         guard let stopRoutes = data.stopRoutes[stopId] else { return [] }
-        
+
         return stopRoutes.map { routeInfo in
-            StopRoute(
+            // Get the full route info to determine origin/destination
+            let routeId = routeInfo.routeId
+            let routeDetail = data.routes[routeId]
+
+            // Format destination with direction prefix
+            let formattedDestination: String
+            if routeInfo.direction == "inbound" {
+                // For return direction, show origin with arrow prefix
+                formattedDestination = "→ \(routeDetail?.originTC ?? routeInfo.destination)"
+            } else {
+                // For outbound direction, show destination with arrow prefix
+                formattedDestination = "→ \(routeInfo.destination)"
+            }
+
+            return StopRoute(
                 routeNumber: routeInfo.routeNumber,
                 company: BusRoute.Company(rawValue: routeInfo.company) ?? .CTB,
                 direction: routeInfo.direction,
-                destination: routeInfo.destination
+                destination: formattedDestination
             )
         }
     }
@@ -172,6 +186,67 @@ class LocalBusDataManager {
     func getDataSummary() -> LocalDataSummary? {
         guard loadBusData(), let data = busData else { return nil }
         return data.summary
+    }
+    
+    // MARK: - Smart Keyboard Support
+    
+    func getAvailableRoutePrefixes() -> Set<String> {
+        guard loadBusData(), let data = busData else { return [] }
+        
+        var prefixes: Set<String> = []
+        
+        for routeInfo in data.routes.values {
+            let routeNumber = routeInfo.routeNumber
+            
+            // Add all possible prefixes for this route number
+            for i in 1...routeNumber.count {
+                let prefix = String(routeNumber.prefix(i))
+                prefixes.insert(prefix.uppercased())
+            }
+        }
+        
+        return prefixes
+    }
+    
+    func isValidRoutePrefix(_ prefix: String) -> Bool {
+        guard !prefix.isEmpty else { return true }
+        return getAvailableRoutePrefixes().contains(prefix.uppercased())
+    }
+    
+    func getPossibleNextCharacters(for currentInput: String) -> Set<Character> {
+        guard loadBusData(), let data = busData else { return [] }
+        
+        let input = currentInput.uppercased()
+        var possibleChars: Set<Character> = []
+        
+        for routeInfo in data.routes.values {
+            let routeNumber = routeInfo.routeNumber.uppercased()
+            
+            if routeNumber.hasPrefix(input) && routeNumber.count > input.count {
+                let nextCharIndex = routeNumber.index(routeNumber.startIndex, offsetBy: input.count)
+                let nextChar = routeNumber[nextCharIndex]
+                possibleChars.insert(nextChar)
+            }
+        }
+        
+        return possibleChars
+    }
+    
+    // MARK: - Stop Coordinates
+    
+    func getStopCoordinates(stopId: String) -> (latitude: Double, longitude: Double)? {
+        guard loadBusData(), let data = busData else { return nil }
+        
+        if let stopInfo = data.stops[stopId] {
+            return (latitude: stopInfo.latitude, longitude: stopInfo.longitude)
+        }
+        
+        return nil
+    }
+    
+    func getStopInfo(stopId: String) -> LocalStopInfo? {
+        guard loadBusData(), let data = busData else { return nil }
+        return data.stops[stopId]
     }
 }
 

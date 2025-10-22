@@ -188,9 +188,9 @@ class BusAPIService {
                 let destination: String
                 
                 if route.direction == "inbound" {
-                    destination = "返：\(routeInfo.data.orig_tc)"
+                    destination = "→ \(routeInfo.data.orig_tc)"
                 } else {
-                    destination = "往：\(routeInfo.data.dest_tc)"
+                    destination = "→ \(routeInfo.data.dest_tc)"
                 }
                 
                 completion(.success(destination))
@@ -550,8 +550,8 @@ class BusAPIService {
                     origin: stops.first?.displayName ?? "起點",
                     destination: stops.last?.displayName ?? "終點",
                     stops: stops,
-                    estimatedDuration: self.estimateDuration(for: routeNumber),
-                    operatingHours: "06:00 - 23:30"
+                    estimatedDuration: nil,
+                    operatingHours: nil
                 )
                 
                 // Cache the result
@@ -665,7 +665,39 @@ class BusAPIService {
         var updatedStops = stops
         
         for (index, stop) in stops.enumerated() {
-            if stopNameCache[stop.stopId] == nil {
+            // Always try to get coordinates from local data first
+            var stopLatitude: Double? = nil
+            var stopLongitude: Double? = nil
+            var stopName = stop.nameTC
+            
+            // Get coordinates from local bus data
+            if let coordinates = LocalBusDataManager.shared.getStopCoordinates(stopId: stop.stopId) {
+                stopLatitude = coordinates.latitude
+                stopLongitude = coordinates.longitude
+                print("📍 從本地資料獲取座標 \(stop.stopId): (\(coordinates.latitude), \(coordinates.longitude))")
+            }
+            
+            // Get stop info (name and coordinates) from local data if available
+            if let localStopInfo = LocalBusDataManager.shared.getStopInfo(stopId: stop.stopId) {
+                stopName = localStopInfo.nameTC
+                stopLatitude = localStopInfo.latitude
+                stopLongitude = localStopInfo.longitude
+                print("📍 從本地資料獲取站點資訊 \(stop.stopId): \(localStopInfo.nameTC)")
+                
+                // Update the stop with local data
+                updatedStops[index] = BusStop(
+                    stopId: stop.stopId,
+                    sequence: stop.sequence,
+                    nameTC: stopName,
+                    nameEN: localStopInfo.nameEN,
+                    latitude: stopLatitude,
+                    longitude: stopLongitude
+                )
+                
+                // Cache the name for future use
+                stopNameCache[stop.stopId] = stopName
+            } else if stopNameCache[stop.stopId] == nil {
+                // Fall back to API if not in local data
                 group.enter()
                 
                 // Create a dummy route to use existing stop name fetching
@@ -680,18 +712,29 @@ class BusAPIService {
                 fetchStopName(for: dummyRoute) { result in
                     if case .success(let name) = result {
                         print("取得站點名稱: \(stop.stopId) -> \(name)")
-                        // Update the stop with the fetched name
+                        // Update the stop with the fetched name and coordinates from local data
                         updatedStops[index] = BusStop(
                             stopId: stop.stopId,
                             sequence: stop.sequence,
                             nameTC: name,
                             nameEN: stop.nameEN,
-                            latitude: stop.latitude,
-                            longitude: stop.longitude
+                            latitude: stopLatitude,
+                            longitude: stopLongitude
                         )
                     }
                     group.leave()
                 }
+            } else {
+                // Use cached name with coordinates from local data
+                let cachedName = stopNameCache[stop.stopId] ?? stop.nameTC
+                updatedStops[index] = BusStop(
+                    stopId: stop.stopId,
+                    sequence: stop.sequence,
+                    nameTC: cachedName,
+                    nameEN: stop.nameEN,
+                    latitude: stopLatitude,
+                    longitude: stopLongitude
+                )
             }
         }
         
@@ -728,8 +771,8 @@ class BusAPIService {
                 origin: self.extractOrigin(from: matchingRoutes.first!),
                 destination: self.extractDestination(from: matchingRoutes.first!),
                 stops: mockStops,
-                estimatedDuration: self.estimateDuration(for: routeNumber),
-                operatingHours: "06:00 - 23:30"
+                estimatedDuration: nil,
+                operatingHours: nil
             )
             
             DispatchQueue.main.async {
@@ -1227,7 +1270,7 @@ class BusAPIService {
     private func getKMBDestinationPlaceholder(route: String, bound: String) -> String {
         // Provide some common destinations as placeholders
         // This could be enhanced with a lookup table
-        return bound.lowercased() == "o" ? "往終點站" : "往起點站"
+        return bound.lowercased() == "o" ? "→ 終點站" : "→ 起點站"
     }
     
     private func enhanceKMBRoutesWithDestinations(_ routes: [StopRoute], completion: @escaping ([StopRoute]) -> Void) {
@@ -1343,25 +1386,32 @@ class BusAPIService {
     private func getCTBRouteDestination(route: String, company: String, direction: String, completion: @escaping (String) -> Void) {
         let urlString = "https://rt.data.gov.hk/v2/transport/citybus/route/\(company)/\(route)"
         guard let url = URL(string: urlString) else {
-            completion(direction.lowercased() == "o" ? "往終點站" : "往起點站")
+            // Use full direction string for comparison
+            let isOutbound = direction == "outbound" || direction.lowercased() == "o"
+            completion(isOutbound ? "→ 終點站" : "→ 起點站")
             return
         }
-        
+
         session.dataTask(with: url) { data, response, error in
             guard let data = data,
                   error == nil else {
-                completion(direction.lowercased() == "o" ? "往終點站" : "往起點站")
+                let isOutbound = direction == "outbound" || direction.lowercased() == "o"
+                completion(isOutbound ? "→ 終點站" : "→ 起點站")
                 return
             }
-            
+
             do {
                 let routeResponse = try JSONDecoder().decode(BusRouteInfo.self, from: data)
-                let destination = direction.lowercased() == "o" ? 
-                    routeResponse.data.dest_tc : 
+                // Use full direction string for comparison
+                let isOutbound = direction == "outbound" || direction.lowercased() == "o"
+                let destinationName = isOutbound ?
+                    routeResponse.data.dest_tc :
                     routeResponse.data.orig_tc
-                completion(destination)
+                let formattedDestination = "→ \(destinationName)"
+                completion(formattedDestination)
             } catch {
-                completion(direction.lowercased() == "o" ? "往終點站" : "往起點站")
+                let isOutbound = direction == "outbound" || direction.lowercased() == "o"
+                completion(isOutbound ? "→ 終點站" : "→ 起點站")
             }
         }.resume()
     }
@@ -1696,17 +1746,6 @@ class BusAPIService {
         }
     }
     
-    private func estimateDuration(for routeNumber: String) -> Int {
-        // Estimate journey time in minutes
-        switch routeNumber {
-        case "793": return 45
-        case "795X": return 50
-        case "796X": return 40
-        case "796P": return 35
-        case "798": return 30
-        default: return 25
-        }
-    }
 }
 
 enum APIError: Error, LocalizedError {

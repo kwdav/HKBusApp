@@ -20,6 +20,13 @@ class BusRouteKeyboard: UIView {
     // Letters array for bus routes
     private let letters = ["A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "R", "S", "T", "X"]
     
+    // Button references for smart disabling
+    private var numberButtons: [String: UIButton] = [:]
+    private var letterButtons: [String: UIButton] = [:]
+    
+    // Local data manager for smart predictions
+    private let localDataManager = LocalBusDataManager.shared
+    
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
@@ -31,7 +38,7 @@ class BusRouteKeyboard: UIView {
     }
     
     private func setupUI() {
-        backgroundColor = UIColor.black.withAlphaComponent(0.9)
+        backgroundColor = UIColor.systemBackground.withAlphaComponent(0.95)
         layer.cornerRadius = 12
         translatesAutoresizingMaskIntoConstraints = false
         
@@ -56,8 +63,8 @@ class BusRouteKeyboard: UIView {
         numbersContainer.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(numbersContainer)
         
-        // Create 3x4 grid (7-9, 4-6, 1-3, 0) - numbers from bottom to top like standard keypad
-        let numbers = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "⌫", "0", ""]
+        // Create 3x4 grid (7-9, 4-6, 1-3, [空]-0-⌫) - numbers from bottom to top like standard keypad
+        let numbers = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "", "0", "⌫"]
         
         for (index, number) in numbers.enumerated() {
             // Skip empty slots
@@ -68,6 +75,11 @@ class BusRouteKeyboard: UIView {
             let button = createKeyButton(title: number, isNumber: true)
             button.translatesAutoresizingMaskIntoConstraints = false
             numbersContainer.addSubview(button)
+            
+            // Store button reference for smart disabling
+            if number != "⌫" {
+                numberButtons[number] = button
+            }
             
             let row = index / 3
             let col = index % 3
@@ -115,92 +127,126 @@ class BusRouteKeyboard: UIView {
     private func setupLettersSection() {
         lettersContainer.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(lettersContainer)
-        
+
         // Scrollable letters view
         lettersScrollView.translatesAutoresizingMaskIntoConstraints = false
         lettersScrollView.showsVerticalScrollIndicator = false
         lettersContainer.addSubview(lettersScrollView)
-        
-        // Create letter buttons - 2 per row, each 1/5 of screen width
+
+        // Main vertical stack view to hold all rows
+        lettersStackView.axis = .vertical
+        lettersStackView.alignment = .leading  // Align to top-left
+        lettersStackView.distribution = .equalSpacing
+        lettersStackView.spacing = 5  // 5px spacing between rows
+        lettersStackView.translatesAutoresizingMaskIntoConstraints = false
+        lettersScrollView.addSubview(lettersStackView)
+
+        // Button dimensions
         let buttonHeight: CGFloat = 50
-        let spacing: CGFloat = 5  // 5px spacing like numbers
-        let margin: CGFloat = 8
-        
-        for (index, letter) in letters.enumerated() {
+
+        // Create all letter buttons (but don't add to StackView yet)
+        for letter in letters {
             let button = createKeyButton(title: letter, isNumber: false)
             button.addTarget(self, action: #selector(letterButtonTapped(_:)), for: .touchUpInside)
             button.translatesAutoresizingMaskIntoConstraints = false
-            lettersScrollView.addSubview(button)
-            
-            let row = index / 2
-            let col = index % 2
-            
-            NSLayoutConstraint.activate([
-                button.heightAnchor.constraint(equalToConstant: buttonHeight),
-                button.topAnchor.constraint(equalTo: lettersScrollView.topAnchor, 
-                                          constant: margin + CGFloat(row) * (buttonHeight + spacing))
-            ])
-            
-            // Handle horizontal positioning for 2-column layout in letters container
-            if col == 0 {
-                // First column: left side with explicit width
-                NSLayoutConstraint.activate([
-                    button.leadingAnchor.constraint(equalTo: lettersScrollView.leadingAnchor),
-                    button.widthAnchor.constraint(equalTo: lettersScrollView.widthAnchor, multiplier: 0.5, constant: -2.5)
-                ])
-            } else {
-                // Second column: positioned relative to first column button in same row
-                let firstInRowIndex = row * 2  // Index of first button in this row
-                if firstInRowIndex < index {
-                    let firstButton = lettersScrollView.subviews[firstInRowIndex] as! UIButton
-                    NSLayoutConstraint.activate([
-                        button.leadingAnchor.constraint(equalTo: firstButton.trailingAnchor, constant: spacing),
-                        button.widthAnchor.constraint(equalTo: lettersScrollView.widthAnchor, multiplier: 0.5, constant: -2.5)
-                    ])
-                }
-            }
+
+            // Store button reference
+            letterButtons[letter] = button
+
+            // Set button height constraint
+            button.heightAnchor.constraint(equalToConstant: buttonHeight).isActive = true
         }
-        
-        // Calculate content height for scroll view (2-column layout)
-        let rows = (letters.count + 1) / 2 // Round up division
-        let contentHeight = margin * 2 + CGFloat(rows) * buttonHeight + CGFloat(max(0, rows - 1)) * spacing
-        
+
         // Set up constraints
         NSLayoutConstraint.activate([
             // Letters container (right side) - positioned after numbers with gap
-            lettersContainer.leadingAnchor.constraint(equalTo: numbersContainer.trailingAnchor, constant: 10),  // 10px gap between numbers and letters
+            lettersContainer.leadingAnchor.constraint(equalTo: numbersContainer.trailingAnchor, constant: 10),  // 10px gap
             lettersContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             lettersContainer.topAnchor.constraint(equalTo: containerView.topAnchor),
             lettersContainer.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-            // Remove conflicting width constraint - let it use remaining space
-            
+
             // Scroll view
             lettersScrollView.topAnchor.constraint(equalTo: lettersContainer.topAnchor),
             lettersScrollView.leadingAnchor.constraint(equalTo: lettersContainer.leadingAnchor),
             lettersScrollView.trailingAnchor.constraint(equalTo: lettersContainer.trailingAnchor),
             lettersScrollView.bottomAnchor.constraint(equalTo: lettersContainer.bottomAnchor),
-            lettersScrollView.contentLayoutGuide.heightAnchor.constraint(equalToConstant: contentHeight)
+
+            // Stack view inside scroll view with padding
+            lettersStackView.topAnchor.constraint(equalTo: lettersScrollView.topAnchor, constant: 8),
+            lettersStackView.leadingAnchor.constraint(equalTo: lettersScrollView.leadingAnchor),
+            lettersStackView.trailingAnchor.constraint(equalTo: lettersScrollView.trailingAnchor),
+            lettersStackView.bottomAnchor.constraint(equalTo: lettersScrollView.bottomAnchor, constant: -8),
+            lettersStackView.widthAnchor.constraint(equalTo: lettersScrollView.widthAnchor)
         ])
+
+        // Initial organization of buttons (all visible)
+        reorganizeLetterButtons()
     }
     
+    // MARK: - Letter Button Organization (Float Left Behavior)
+
+    private func reorganizeLetterButtons() {
+        // Remove all existing row StackViews from the main stack
+        lettersStackView.arrangedSubviews.forEach { view in
+            lettersStackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+
+        // Collect all visible buttons in order
+        var visibleButtons: [UIButton] = []
+        for letter in letters {
+            if let button = letterButtons[letter], !button.isHidden {
+                visibleButtons.append(button)
+            }
+        }
+
+        // Create rows with 2 buttons each (float left behavior)
+        let spacing: CGFloat = 5
+        for i in stride(from: 0, to: visibleButtons.count, by: 2) {
+            let rowStack = UIStackView()
+            rowStack.axis = .horizontal
+            rowStack.alignment = .fill
+            rowStack.distribution = .fillEqually
+            rowStack.spacing = spacing
+            rowStack.translatesAutoresizingMaskIntoConstraints = false
+
+            // Add first button
+            rowStack.addArrangedSubview(visibleButtons[i])
+
+            // Add second button if exists, otherwise add spacer
+            if i + 1 < visibleButtons.count {
+                rowStack.addArrangedSubview(visibleButtons[i + 1])
+            } else {
+                // Last row with single button - add spacer to maintain layout
+                let spacer = UIView()
+                spacer.translatesAutoresizingMaskIntoConstraints = false
+                rowStack.addArrangedSubview(spacer)
+            }
+
+            // Add row to main stack FIRST
+            lettersStackView.addArrangedSubview(rowStack)
+
+            // THEN set row width to match container (after it's in the hierarchy)
+            rowStack.widthAnchor.constraint(equalTo: lettersStackView.widthAnchor).isActive = true
+        }
+    }
+
     private func createKeyButton(title: String, isNumber: Bool) -> UIButton {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
         button.titleLabel?.font = isNumber ? UIFont.systemFont(ofSize: 20, weight: .medium) : UIFont.systemFont(ofSize: 18, weight: .medium)
         button.backgroundColor = UIColor.systemGray5
-        button.setTitleColor(UIColor.white, for: .normal)
+        button.setTitleColor(UIColor.label, for: .normal)
         button.layer.cornerRadius = 8
-        button.layer.borderWidth = 0.5
-        button.layer.borderColor = UIColor.systemGray4.cgColor
-        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowColor = UIColor.label.withAlphaComponent(0.3).cgColor
         button.layer.shadowOffset = CGSize(width: 0, height: 1)
         button.layer.shadowOpacity = 0.3
         button.layer.shadowRadius = 2
-        
+
         // Add touch feedback
         button.addTarget(self, action: #selector(buttonTouchDown(_:)), for: .touchDown)
         button.addTarget(self, action: #selector(buttonTouchUp(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
-        
+
         return button
     }
     
@@ -235,6 +281,73 @@ class BusRouteKeyboard: UIView {
                 sender.backgroundColor = UIColor.systemGray5
             }
         }
+    }
+    
+    // MARK: - Smart Button Control
+    
+    func updateButtonStates(for currentInput: String) {
+        let possibleChars = localDataManager.getPossibleNextCharacters(for: currentInput)
+
+        // Update number buttons (disable instead of hide to maintain grid layout)
+        for (number, button) in numberButtons {
+            let isEnabled = possibleChars.contains(Character(number))
+            updateButtonEnabled(button, enabled: isEnabled, isLetter: false)
+        }
+
+        // Update letter buttons (hide instead of disable)
+        for (letter, button) in letterButtons {
+            let isAvailable = possibleChars.contains(Character(letter))
+            updateButtonEnabled(button, enabled: isAvailable, isLetter: true)
+        }
+    }
+
+    private func updateButtonEnabled(_ button: UIButton, enabled: Bool, isLetter: Bool) {
+        if isLetter {
+            // For letter buttons: hide when not available, then reorganize
+            let wasHidden = button.isHidden
+            button.isHidden = !enabled
+            button.alpha = enabled ? 1.0 : 0.0
+            button.isEnabled = enabled
+
+            // Only reorganize if visibility actually changed
+            if wasHidden != button.isHidden {
+                // Instant reorganization without animation
+                self.reorganizeLetterButtons()
+                self.lettersStackView.layoutIfNeeded()
+            }
+        } else {
+            // For number buttons: disable but keep visible to maintain grid layout
+            button.isEnabled = enabled
+
+            // Instant state change without animation
+            if enabled {
+                button.alpha = 1.0
+                button.backgroundColor = UIColor.systemGray5
+                button.setTitleColor(UIColor.label, for: .normal)
+            } else {
+                button.alpha = 0.7
+                button.backgroundColor = UIColor.systemGray5
+                button.setTitleColor(UIColor.systemGray3, for: .normal)
+            }
+        }
+    }
+    
+    func resetAllButtons() {
+        // Reset all buttons to enabled and visible state
+        for (_, button) in numberButtons {
+            updateButtonEnabled(button, enabled: true, isLetter: false)
+        }
+
+        // For letter buttons, show all first, then reorganize once
+        for (_, button) in letterButtons {
+            button.isHidden = false
+            button.alpha = 1.0
+            button.isEnabled = true
+        }
+
+        // Instant reorganization after all buttons are visible
+        self.reorganizeLetterButtons()
+        self.lettersStackView.layoutIfNeeded()
     }
     
     // MARK: - Show/Hide Methods

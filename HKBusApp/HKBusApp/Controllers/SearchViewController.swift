@@ -8,6 +8,7 @@ class SearchViewController: UIViewController {
     private let tableView = UITableView(frame: .zero, style: .grouped)
     private let customKeyboard = BusRouteKeyboard()
     private let refreshControl = UIRefreshControl()
+    private let searchBarBackgroundView = UIView()
     // Remove segmented control for now, only support route search
     
     private var routeSearchResults: [RouteSearchResult] = []
@@ -23,6 +24,7 @@ class SearchViewController: UIViewController {
     private var currentLocation: CLLocation?
     private var isKeyboardVisible = false
     private var locationTimer: Timer?
+    private var isUpdatingFromKeyboard = false  // Flag to prevent circular updates
     
     // Structure to track route with distance and stop name
     private struct RouteWithDistance {
@@ -33,42 +35,78 @@ class SearchViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        // Ensure content extends under translucent bars
+        extendedLayoutIncludesOpaqueBars = true
+        edgesForExtendedLayout = .all
         setupUI()
         setupSearchBar()
         setupTableView()
         setupCustomKeyboard()
         setupTapGesture()
         setupLocationManager()
-        
+
         // Immediately load nearby routes without waiting for GPS
         loadNearbyRoutesImmediately()
+
+        // Listen for font size changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(fontSizeDidChange),
+            name: FontSizeManager.fontSizeDidChangeNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func fontSizeDidChange() {
+        tableView.reloadData()
     }
     
+    // Show status bar to display clock and battery
+    override var prefersStatusBarHidden: Bool {
+        return false
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+
+        // Sync state between searchBar.text and currentSearchText early
+        syncSearchStates()
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
-        // Sync state between searchBar.text and currentSearchText
-        syncSearchStates()
-        
+
         // Don't auto focus search bar - user will use custom keyboard
     }
     
     private func setupUI() {
-        view.backgroundColor = UIColor.black
+        view.backgroundColor = UIColor.systemBackground
+        
+        // Search bar background with clean iOS-style appearance
+        searchBarBackgroundView.backgroundColor = UIColor.systemBackground
+        searchBarBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         
         // Search bar
         searchBar.placeholder = "搜尋路線..."
         searchBar.searchBarStyle = .minimal
-        searchBar.tintColor = UIColor.white
-        searchBar.barTintColor = UIColor.black
+        searchBar.tintColor = UIColor.label
+        searchBar.backgroundColor = UIColor.systemBackground
+        searchBar.barTintColor = UIColor.systemBackground
         searchBar.showsCancelButton = false  // Initially hidden, will show when text is entered
         searchBar.autocapitalizationType = .allCharacters
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         
-        // Customize search bar appearance for both light and dark mode
+        // Customize search bar appearance for clean visibility
         if let textField = searchBar.value(forKey: "searchField") as? UITextField {
             textField.textColor = UIColor.label
             textField.backgroundColor = UIColor.secondarySystemBackground
+            textField.layer.cornerRadius = 10
+            textField.layer.borderWidth = 0.5
+            textField.layer.borderColor = UIColor.separator.cgColor
         }
         
         // Customize Cancel button text
@@ -81,28 +119,35 @@ class SearchViewController: UIViewController {
         tableView.separatorStyle = .none
         tableView.translatesAutoresizingMaskIntoConstraints = false
         
-        view.addSubview(searchBar)
         view.addSubview(tableView)
+        view.addSubview(searchBarBackgroundView)  // Add background first
+        view.addSubview(searchBar)  // Add search bar on top
         view.addSubview(customKeyboard)
         
         NSLayoutConstraint.activate([
-            // Search bar - pin to top without extra spacing
+            // Search bar background - full width at top, under status bar but above safe area
+            searchBarBackgroundView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            searchBarBackgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            searchBarBackgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            searchBarBackgroundView.heightAnchor.constraint(equalToConstant: 44),
+            
+            // Search bar - positioned at safe area top (below status bar)
             searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),  // Keep some padding for text
+            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),  // Keep some padding for text
             searchBar.heightAnchor.constraint(equalToConstant: 44),
             
-            // Table view - full height from search bar to bottom
-            tableView.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 16),
+            // Table view - starts below search bar background to avoid overlay
+            tableView.topAnchor.constraint(equalTo: searchBarBackgroundView.bottomAnchor, constant: 4),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor), // Extend under tab bar
             
-            // Custom keyboard - overlaid on top of table view, full width coverage
+            // Custom keyboard - overlaid on top of table view, positioned above tab bar
             customKeyboard.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             customKeyboard.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            customKeyboard.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            customKeyboard.heightAnchor.constraint(equalToConstant: 260)  // Updated from 240 to 260 (20px increase for 4 rows * 5px)
+            customKeyboard.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor), // Above tab bar
+            customKeyboard.heightAnchor.constraint(equalToConstant: 260)
         ])
     }
     
@@ -119,17 +164,19 @@ class SearchViewController: UIViewController {
     private func setupTableView() {
         tableView.delegate = self
         tableView.dataSource = self
-        tableView.backgroundColor = UIColor.black
+        tableView.backgroundColor = UIColor.systemBackground
         tableView.separatorStyle = .none
+        // Enable automatic content inset for translucent bars
+        tableView.contentInsetAdjustmentBehavior = .automatic
         tableView.sectionHeaderTopPadding = 0 // Reduce top padding for iOS 15+
         tableView.register(SearchResultTableViewCell.self, forCellReuseIdentifier: SearchResultTableViewCell.identifier)
         tableView.register(BusETATableViewCell.self, forCellReuseIdentifier: BusETATableViewCell.identifier)
         
         // Setup refresh control for pull-to-refresh
-        refreshControl.tintColor = UIColor.white
+        refreshControl.tintColor = UIColor.label
         refreshControl.attributedTitle = NSAttributedString(
             string: "更新附近路線",
-            attributes: [.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 14)]
+            attributes: [.foregroundColor: UIColor.label, .font: UIFont.systemFont(ofSize: 14)]
         )
         refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
         tableView.refreshControl = refreshControl
@@ -176,7 +223,10 @@ class SearchViewController: UIViewController {
         guard isKeyboardVisible else { return }
         customKeyboard.hide(animated: true)
         isKeyboardVisible = false
-        
+
+        // Sync states when hiding keyboard to ensure consistency
+        syncSearchStates()
+
         // Adjust table view insets when keyboard is hidden
         updateTableViewInsets()
     }
@@ -185,10 +235,10 @@ class SearchViewController: UIViewController {
         var bottomInset: CGFloat = 0
         
         if isKeyboardVisible {
-            // When keyboard is visible, add keyboard height + margin to bottom inset
-            bottomInset = 260 + 16 // keyboard height + margin for content visibility
+            // When keyboard is visible, add keyboard height since it's now positioned above tab bar
+            bottomInset = 260 // keyboard height (no extra margin needed since keyboard is above tab bar)
         } else {
-            // When keyboard is hidden, no bottom padding needed as table is full height
+            // When keyboard is hidden, account for tab bar height
             bottomInset = 0
         }
         
@@ -234,6 +284,16 @@ class SearchViewController: UIViewController {
         locationTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
             print("⏰ 位置獲取超時，保持顯示默認路線")
             self.locationManager.stopUpdatingLocation()
+        }
+    }
+    
+    // MARK: - Public Methods for Tab Interaction
+    func showKeyboardOnTabSwitch() {
+        // This method is now only called when user taps the route search tab repeatedly
+        // Always show keyboard when called (no conditions needed)
+        if !isKeyboardVisible {
+            showKeyboard()
+            searchBar.becomeFirstResponder()
         }
     }
     
@@ -428,13 +488,14 @@ class SearchViewController: UIViewController {
             let delay = Double(batchIndex) * 0.5 // 0.5 second delay between batches
             
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                self.loadETABatch(batch: batch, batchIndex: batchIndex)
+                let isLastBatch = (batchIndex == batches.count - 1)
+                self.loadETABatch(batch: batch, batchIndex: batchIndex, isLastBatch: isLastBatch)
             }
         }
     }
     
-    private func loadETABatch(batch: [RouteWithDistance], batchIndex: Int) {
-        print("📦 載入批次 \(batchIndex + 1)，包含 \(batch.count) 條路線")
+    private func loadETABatch(batch: [RouteWithDistance], batchIndex: Int, isLastBatch: Bool = false) {
+        print("📦 載入批次 \(batchIndex + 1)，包含 \(batch.count) 條路線，是否最後批次: \(isLastBatch)")
         
         let dispatchGroup = DispatchGroup()
         
@@ -471,7 +532,8 @@ class SearchViewController: UIViewController {
                         if globalIndex < self?.busDisplayData.count ?? 0 {
                             self?.busDisplayData[globalIndex].etas = etas
                             self?.busDisplayData[globalIndex].isLoadingETAs = false
-                            // Reload only the specific row to avoid full table refresh
+                            
+                            // Just reload the specific row, no need to resort
                             let indexPath = IndexPath(row: globalIndex, section: 0)
                             if self?.tableView.indexPathsForVisibleRows?.contains(indexPath) == true {
                                 self?.tableView.reloadRows(at: [indexPath], with: .none)
@@ -482,9 +544,12 @@ class SearchViewController: UIViewController {
                     
                 case .failure(let error):
                     DispatchQueue.main.async {
-                        // Update loading state even on failure
+                        // Update loading state and clear ETAs on failure
                         if globalIndex < self?.busDisplayData.count ?? 0 {
                             self?.busDisplayData[globalIndex].isLoadingETAs = false
+                            self?.busDisplayData[globalIndex].etas = [] // Ensure empty ETAs for sorting
+                            
+                            // Just reload the specific row, no need to resort
                             let indexPath = IndexPath(row: globalIndex, section: 0)
                             if self?.tableView.indexPathsForVisibleRows?.contains(indexPath) == true {
                                 self?.tableView.reloadRows(at: [indexPath], with: .none)
@@ -498,12 +563,90 @@ class SearchViewController: UIViewController {
         
         dispatchGroup.notify(queue: .main) {
             print("📦 批次 \(batchIndex + 1) 載入完成")
+            // Only trigger resort on the last batch completion
+            if isLastBatch {
+                print("🏁 最後批次完成，進行距離排序")
+                self.resortBusDisplayData()
+            }
         }
+    }
+    
+    
+    private func checkAndResortIfAllBatchesComplete() {
+        // Check if all items have finished loading (no more isLoadingETAs = true)
+        let stillLoading = busDisplayData.contains { $0.isLoadingETAs }
+        
+        if !stillLoading {
+            print("📊 所有ETA載入完成，開始重新排序")
+            resortBusDisplayData()
+        }
+    }
+    
+    private func resortBusDisplayData() {
+        print("🔄 開始重新排序附近路線，按距離排序")
+        
+        busDisplayData.sort { item1, item2 in
+            // 提取距離信息（從stopName中解析，格式如"站名 (100米)"）
+            let distance1 = extractDistance(from: item1.stopName)
+            let distance2 = extractDistance(from: item2.stopName)
+            
+            // 第一優先級：距離較近的在前
+            if distance1 != distance2 {
+                return distance1 < distance2
+            }
+            
+            // 第二優先級：同樣距離下，按路線號碼排序
+            return item1.route.route.localizedStandardCompare(item2.route.route) == .orderedAscending
+        }
+        
+        print("✅ 排序完成：按距離排序，共 \(busDisplayData.count) 條路線")
+        
+        // Reload table view with animation
+        DispatchQueue.main.async {
+            self.tableView.reloadData()
+        }
+    }
+    
+    private func extractDistance(from stopName: String) -> Double {
+        // 解析距離信息，格式如"站名 (100米)" 或 "站名 (1.2公里)"
+        let pattern = #"(\d+(?:\.\d+)?)(米|公里)"#
+        
+        if let range = stopName.range(of: pattern, options: .regularExpression),
+           let match = stopName[range].firstMatch(of: /(\d+(?:\.\d+)?)(米|公里)/) {
+            let number = Double(String(match.1)) ?? 0.0
+            let unit = String(match.2)
+            
+            // 統一轉換為米
+            if unit == "公里" {
+                return number * 1000.0
+            } else {
+                return number
+            }
+        }
+        
+        // 如果無法解析距離，返回一個很大的數字讓它排在最後
+        return Double.greatestFiniteMagnitude
     }
     
 
     
     private func performSearch(for query: String) {
+        // Verify state consistency before searching
+        let searchBarText = searchBar.text ?? ""
+        if query != currentSearchText {
+            print("⚠️ 搜尋一致性警告 - query: '\(query)', currentSearchText: '\(currentSearchText)'")
+            // Use currentSearchText as source of truth
+            if !currentSearchText.isEmpty && currentSearchText != query {
+                print("🔧 使用 currentSearchText 作為真實來源: '\(currentSearchText)'")
+                performSearch(for: currentSearchText)
+                return
+            }
+        }
+
+        if query != searchBarText {
+            print("⚠️ 搜尋一致性警告 - query: '\(query)', searchBar.text: '\(searchBarText)'")
+        }
+
         // Only search if query has meaningful content (at least 1 character)
         guard query.count >= 1 else {
             // Show initial routes when no search query
@@ -516,7 +659,7 @@ class SearchViewController: UIViewController {
             }
             return
         }
-        
+
         searchRoutes(query: query)
     }
     
@@ -540,6 +683,11 @@ class SearchViewController: UIViewController {
                     self?.routeSearchResults = results
                     self?.busDisplayData = [] // Clear initial routes when showing search results
                     self?.tableView.reloadData()
+                    
+                    // Scroll to top to show search results from the beginning
+                    if !results.isEmpty {
+                        self?.tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
+                    }
                 case .failure(let error):
                     print("搜尋錯誤: \(error.localizedDescription)")
                     self?.routeSearchResults = []
@@ -554,19 +702,37 @@ class SearchViewController: UIViewController {
 // MARK: - UISearchBarDelegate
 extension SearchViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        // If update is from custom keyboard, skip to prevent circular updates
+        if isUpdatingFromKeyboard {
+            print("⏭️ textDidChange 跳過 - 來自自定義鍵盤更新")
+            return
+        }
+
+        print("📝 textDidChange 觸發 - 外部輸入: '\(searchText)'")
+
+        // Sync currentSearchText with searchBar when user types via other means (paste, etc.)
+        currentSearchText = searchText
+
+        // Update keyboard button states based on new input
+        if !searchText.isEmpty {
+            customKeyboard.updateButtonStates(for: searchText)
+        } else {
+            customKeyboard.resetAllButtons()
+        }
+
         // Show/hide cancel button based on text content
         let hasText = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
         searchBar.setShowsCancelButton(hasText, animated: true)
-        
+
         // Cancel previous search timer
         searchTimer?.invalidate()
-        
+
         guard hasText else {
             routeSearchResults = []
             tableView.reloadData()
             return
         }
-        
+
         // Debounce search with 0.3 second delay
         searchTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
             self.performSearch(for: searchText)
@@ -581,19 +747,29 @@ extension SearchViewController: UISearchBarDelegate {
     }
     
     func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
-        // Clear all search-related data
+        // Clear all search-related data - ensure both states are reset
         searchBar.text = ""
         currentSearchText = ""
         routeSearchResults = []
-        
+
+        // Reset keyboard button states to default
+        customKeyboard.resetAllButtons()
+
         // Hide cancel button since text is now empty
         searchBar.setShowsCancelButton(false, animated: true)
         searchBar.resignFirstResponder()
-        
+
+        // Hide keyboard if visible
+        if isKeyboardVisible {
+            hideKeyboard()
+        }
+
         // Reload nearby routes to restore the initial state
         loadNearbyRoutesImmediately()
-        
+
         tableView.reloadData()
+
+        print("🔄 重設搜尋 - searchBar和currentText都已清空")
     }
     
     func searchBarShouldBeginEditing(_ searchBar: UISearchBar) -> Bool {
@@ -631,7 +807,7 @@ extension SearchViewController: UITableViewDataSource {
             let routeResult = routeSearchResults[indexPath.row]
             let searchResult = SearchResult(
                 type: .route,
-                title: "\(routeResult.company.rawValue) \(routeResult.routeNumber)",
+                title: routeResult.routeNumber,
                 subtitle: routeResult.directions.map { $0.displayText }.joined(separator: " | "),
                 route: nil,
                 routeSearchResult: routeResult
@@ -644,9 +820,20 @@ extension SearchViewController: UITableViewDataSource {
             guard let cell = tableView.dequeueReusableCell(withIdentifier: BusETATableViewCell.identifier, for: indexPath) as? BusETATableViewCell else {
                 return UITableViewCell()
             }
-            
+
             let busData = busDisplayData[indexPath.row]
             cell.configure(with: busData)
+
+            // Show star button and set favorite state
+            cell.setStarButtonVisible(true)
+            let isFavorite = favoritesManager.isFavorite(busData.route)
+            cell.setFavoriteState(isFavorite)
+
+            // Set favorite toggle callback
+            cell.onFavoriteToggle = { [weak self] in
+                self?.toggleFavorite(for: busData.route)
+            }
+
             return cell
         }
     }
@@ -664,34 +851,12 @@ extension SearchViewController: UITableViewDelegate {
     }
     
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
-        // Show header only when displaying initial nearby routes (not search results)
-        if routeSearchResults.isEmpty && !busDisplayData.isEmpty {
-            return 32
-        }
+        // Remove headers to maximize space usage
         return 0
     }
     
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-        // Show "附近路線" header only when displaying initial nearby routes
-        if routeSearchResults.isEmpty && !busDisplayData.isEmpty {
-            let headerView = UIView()
-            headerView.backgroundColor = UIColor.black
-            
-            let titleLabel = UILabel()
-            titleLabel.text = "附近路線"
-            titleLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
-            titleLabel.textColor = UIColor.white
-            titleLabel.translatesAutoresizingMaskIntoConstraints = false
-            
-            headerView.addSubview(titleLabel)
-            
-            NSLayoutConstraint.activate([
-                titleLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 12),
-                titleLabel.bottomAnchor.constraint(equalTo: headerView.bottomAnchor, constant: -4)
-            ])
-            
-            return headerView
-        }
+        // Remove headers to maximize space usage
         return nil
     }
     
@@ -809,73 +974,160 @@ extension SearchViewController: BusRouteKeyboardDelegate {
     func keyboardDidTapNumber(_ number: String) {
         currentSearchText += number
         updateSearchBar()
-        performSearchWithCurrentText()
+
+        // Update smart keyboard button states immediately for better UX
+        customKeyboard.updateButtonStates(for: currentSearchText)
+
+        // Debounce search to avoid excessive API calls (same 0.3s as textDidChange)
+        searchTimer?.invalidate()
+        searchTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+            self?.performSearchWithCurrentText()
+        }
     }
-    
+
     func keyboardDidTapLetter(_ letter: String) {
         currentSearchText += letter
         updateSearchBar()
-        performSearchWithCurrentText()
+
+        // Update smart keyboard button states immediately for better UX
+        customKeyboard.updateButtonStates(for: currentSearchText)
+
+        // Debounce search to avoid excessive API calls (same 0.3s as textDidChange)
+        searchTimer?.invalidate()
+        searchTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+            self?.performSearchWithCurrentText()
+        }
     }
     
     func keyboardDidTapBackspace() {
+        // Ensure both states are in sync before processing backspace
+        let searchBarText = searchBar.text ?? ""
+
         if !currentSearchText.isEmpty {
             currentSearchText.removeLast()
             updateSearchBar()
-            performSearchWithCurrentText()
+
+            // Update smart keyboard button states immediately
+            if !currentSearchText.isEmpty {
+                customKeyboard.updateButtonStates(for: currentSearchText)
+            } else {
+                customKeyboard.resetAllButtons()
+            }
+
+            print("⌫ Backspace: '\(currentSearchText)'")
+
+            // Debounce search (same 0.3s as other inputs)
+            searchTimer?.invalidate()
+            if !currentSearchText.isEmpty {
+                searchTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+                    self?.performSearchWithCurrentText()
+                }
+            } else {
+                // Clear search results immediately when empty
+                routeSearchResults = []
+                tableView.reloadData()
+            }
+        } else if !searchBarText.isEmpty {
+            // Edge case: currentSearchText is empty but searchBar has text
+            // This means states are out of sync - clear searchBar too
+            print("⚠️ 狀態不同步 - searchBar有值但currentText為空，強制清空searchBar")
+            searchBar.text = ""
+            searchBar.setShowsCancelButton(false, animated: true)
+            customKeyboard.resetAllButtons()
+
+            // Reload nearby routes since search is cleared
+            routeSearchResults = []
+            if let location = currentLocation {
+                loadRoutesFromNearbyStops(location: location)
+            } else {
+                loadNearbyRoutesImmediately()
+            }
+        } else {
+            // Both are empty - reset all buttons
+            customKeyboard.resetAllButtons()
         }
     }
     
     
     private func updateSearchBar() {
+        // Set flag to prevent textDidChange from triggering
+        isUpdatingFromKeyboard = true
+
         searchBar.text = currentSearchText
-        
+
         // Update cancel button visibility based on text content
         let hasText = !currentSearchText.trimmingCharacters(in: .whitespaces).isEmpty
         searchBar.setShowsCancelButton(hasText, animated: true)
+
+        // Reset flag after a short delay to allow textDidChange to complete
+        DispatchQueue.main.async {
+            self.isUpdatingFromKeyboard = false
+        }
     }
     
     private func syncSearchStates() {
         let searchBarText = searchBar.text ?? ""
         let searchBarIsEmpty = searchBarText.trimmingCharacters(in: .whitespaces).isEmpty
         let currentTextIsEmpty = currentSearchText.trimmingCharacters(in: .whitespaces).isEmpty
-        
+
         // Debug logging
         print("🔄 同步搜尋狀態 - searchBar: '\(searchBarText)', currentText: '\(currentSearchText)'")
-        
+
         if searchBarIsEmpty && currentTextIsEmpty {
             // Both empty - ensure we show nearby routes
             print("✅ 兩者都為空，載入附近路線")
             routeSearchResults = []
-            if let location = currentLocation {
-                loadRoutesFromNearbyStops(location: location)
-            } else {
-                loadNearbyRoutesImmediately()
+
+            // Reset keyboard to show all buttons
+            customKeyboard.resetAllButtons()
+
+            // Only load nearby routes if we don't have any display data
+            if busDisplayData.isEmpty {
+                if let location = currentLocation {
+                    loadRoutesFromNearbyStops(location: location)
+                } else {
+                    loadNearbyRoutesImmediately()
+                }
             }
+
             searchBar.setShowsCancelButton(false, animated: false)
         } else if searchBarIsEmpty && !currentTextIsEmpty {
             // searchBar empty but currentText has value - clear currentText to match
             print("⚠️ searchBar空但currentText有值，清空currentText")
             currentSearchText = ""
             routeSearchResults = []
-            if let location = currentLocation {
-                loadRoutesFromNearbyStops(location: location)
-            } else {
-                loadNearbyRoutesImmediately()
+
+            // Reset keyboard to show all buttons
+            customKeyboard.resetAllButtons()
+
+            // Reload nearby routes only if needed
+            if busDisplayData.isEmpty {
+                if let location = currentLocation {
+                    loadRoutesFromNearbyStops(location: location)
+                } else {
+                    loadNearbyRoutesImmediately()
+                }
             }
+
             searchBar.setShowsCancelButton(false, animated: false)
         } else if !searchBarIsEmpty && currentTextIsEmpty {
             // currentText empty but searchBar has value - sync currentText to searchBar
             print("⚠️ currentText空但searchBar有值，同步currentText")
             currentSearchText = searchBarText
             performSearch(for: currentSearchText)
+
+            // Update keyboard button states based on current input
+            customKeyboard.updateButtonStates(for: currentSearchText)
         } else if searchBarText != currentSearchText {
             // Both have values but they're different - use searchBar as source of truth
             print("⚠️ 兩者都有值但不一致，以searchBar為準")
             currentSearchText = searchBarText
             performSearch(for: currentSearchText)
+
+            // Update keyboard button states based on current input
+            customKeyboard.updateButtonStates(for: currentSearchText)
         }
-        
+
         // Ensure cancel button state is correct
         let hasText = !currentSearchText.trimmingCharacters(in: .whitespaces).isEmpty
         searchBar.setShowsCancelButton(hasText, animated: false)
@@ -883,6 +1135,21 @@ extension SearchViewController: BusRouteKeyboardDelegate {
     
     private func performSearchWithCurrentText() {
         performSearch(for: currentSearchText)
+    }
+
+    private func toggleFavorite(for busRoute: BusRoute) {
+        let isFavorite = favoritesManager.isFavorite(busRoute)
+
+        if isFavorite {
+            favoritesManager.removeFavorite(busRoute)
+        } else {
+            favoritesManager.addFavorite(busRoute)
+        }
+
+        // Reload the table to update favorite state
+        DispatchQueue.main.async {
+            self.tableView.reloadData()
+        }
     }
 }
 

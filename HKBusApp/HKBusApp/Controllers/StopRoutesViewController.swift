@@ -1,10 +1,12 @@
 import UIKit
+import QuartzCore
 
 class StopRoutesViewController: UIViewController {
     
     // MARK: - Properties
     private let stopResult: StopSearchResult
     private let tableView = UITableView(frame: .zero, style: .grouped)
+    private let refreshControl = UIRefreshControl()
     private let apiService = BusAPIService.shared
     private let favoritesManager = FavoritesManager.shared
     
@@ -55,12 +57,12 @@ class StopRoutesViewController: UIViewController {
     
     // MARK: - UI Setup
     private func setupUI() {
-        view.backgroundColor = UIColor.black
+        view.backgroundColor = UIColor.systemBackground
         title = stopResult.displayName // Use station name as title
         
         // Navigation bar setup
-        navigationController?.navigationBar.tintColor = .white
-        navigationController?.navigationBar.titleTextAttributes = [.foregroundColor: UIColor.white]
+        navigationController?.navigationBar.tintColor = UIColor.label
+        navigationController?.navigationBar.titleTextAttributes = [.foregroundColor: UIColor.label]
         
         setupHeaderView()
         setupTableViewLayout()
@@ -69,21 +71,21 @@ class StopRoutesViewController: UIViewController {
     }
     
     private func setupHeaderView() {
-        headerView.backgroundColor = UIColor(white: 0.1, alpha: 1.0)
+        headerView.backgroundColor = UIColor.secondarySystemBackground
         headerView.layer.cornerRadius = 12
         headerView.translatesAutoresizingMaskIntoConstraints = false
         
         // Stop name
         stopNameLabel.text = stopResult.displayName
         stopNameLabel.font = UIFont.boldSystemFont(ofSize: 20)
-        stopNameLabel.textColor = .white
+        stopNameLabel.textColor = UIColor.label
         stopNameLabel.numberOfLines = 0
         stopNameLabel.translatesAutoresizingMaskIntoConstraints = false
         
         // Route count
         routeCountLabel.text = "共 \(stopResult.routeCount) 條路線經過此站"
         routeCountLabel.font = UIFont.systemFont(ofSize: 14)
-        routeCountLabel.textColor = UIColor(white: 0.7, alpha: 1.0)
+        routeCountLabel.textColor = UIColor.secondaryLabel
         routeCountLabel.translatesAutoresizingMaskIntoConstraints = false
         
         headerView.addSubview(stopNameLabel)
@@ -108,7 +110,7 @@ class StopRoutesViewController: UIViewController {
     }
     
     private func setupTableViewLayout() {
-        tableView.backgroundColor = UIColor.black
+        tableView.backgroundColor = UIColor.systemBackground
         tableView.separatorStyle = .none
         tableView.translatesAutoresizingMaskIntoConstraints = false
         
@@ -125,7 +127,16 @@ class StopRoutesViewController: UIViewController {
     private func setupTableView() {
         tableView.delegate = self
         tableView.dataSource = self
-        tableView.register(StopRouteTableViewCell.self, forCellReuseIdentifier: StopRouteTableViewCell.identifier)
+        tableView.register(BusETATableViewCell.self, forCellReuseIdentifier: BusETATableViewCell.identifier)
+
+        // Setup refresh control
+        refreshControl.tintColor = UIColor.label
+        refreshControl.attributedTitle = NSAttributedString(
+            string: "更新路線",
+            attributes: [.foregroundColor: UIColor.label, .font: UIFont.systemFont(ofSize: 14)]
+        )
+        refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
+        tableView.refreshControl = refreshControl
     }
     
     private func setupLoadingIndicator() {
@@ -142,7 +153,7 @@ class StopRoutesViewController: UIViewController {
     
     private func setupEmptyStateLabel() {
         emptyStateLabel.text = "點擊重新載入路線資料"
-        emptyStateLabel.textColor = UIColor(white: 0.6, alpha: 1.0)
+        emptyStateLabel.textColor = UIColor.secondaryLabel
         emptyStateLabel.font = UIFont.systemFont(ofSize: 16)
         emptyStateLabel.textAlignment = .center
         emptyStateLabel.numberOfLines = 0
@@ -272,6 +283,18 @@ class StopRoutesViewController: UIViewController {
             print("✅ 成功載入 \(self.routesWithETA.count) 條路線")
         }
     }
+
+    @objc private func handleRefresh() {
+        print("🔄 用戶下拉刷新路線")
+
+        // Reload routes with ETA
+        loadRoutesWithETA()
+
+        // End refresh after loading completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.refreshControl.endRefreshing()
+        }
+    }
 }
 
 // MARK: - UITableViewDataSource
@@ -281,17 +304,40 @@ extension StopRoutesViewController: UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        guard let cell = tableView.dequeueReusableCell(withIdentifier: StopRouteTableViewCell.identifier, for: indexPath) as? StopRouteTableViewCell else {
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: BusETATableViewCell.identifier, for: indexPath) as? BusETATableViewCell else {
             return UITableViewCell()
         }
-        
+
         let routeWithETA = routesWithETA[indexPath.row]
-        
-        cell.configure(with: routeWithETA.route, etas: routeWithETA.etas, isFavorite: routeWithETA.isFavorite)
-        cell.onFavoriteButtonTapped = { [weak self] in
+
+        // Convert RouteWithETA to BusDisplayData format
+        let busRoute = BusRoute(
+            stopId: stopResult.stopId,
+            route: routeWithETA.route.routeNumber,
+            companyId: routeWithETA.route.company.rawValue,
+            direction: routeWithETA.route.direction,
+            subTitle: ""
+        )
+
+        let displayData = BusDisplayData(
+            route: busRoute,
+            stopName: stopResult.displayName,
+            destination: routeWithETA.route.destination,
+            etas: routeWithETA.etas,
+            isLoadingETAs: false
+        )
+
+        cell.configure(with: displayData)
+
+        // Show star button and set favorite state
+        cell.setStarButtonVisible(true)
+        cell.setFavoriteState(routeWithETA.isFavorite)
+
+        // Handle favorite toggle
+        cell.onFavoriteToggle = { [weak self] in
             self?.toggleFavorite(for: routeWithETA.route, at: indexPath)
         }
-        
+
         return cell
     }
 }
@@ -304,33 +350,30 @@ extension StopRoutesViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        
+
         let routeWithETA = routesWithETA[indexPath.row]
-        
-        // Navigate to stop ETA for this specific route
-        showStopETA(for: routeWithETA.route)
+
+        // Navigate to route detail page
+        showRouteDetail(for: routeWithETA.route)
     }
     
-    private func showStopETA(for route: StopRoute) {
-        let busStop = BusStop(
-            stopId: stopResult.stopId,
-            sequence: 1,
-            nameTC: stopResult.displayName,
-            nameEN: stopResult.nameEN,
-            latitude: stopResult.latitude,
-            longitude: stopResult.longitude
-        )
-        
-        let stopETAVC = StopETAViewController(
-            stop: busStop,
+    private func showRouteDetail(for route: StopRoute) {
+        let routeDetailVC = RouteDetailViewController(
             routeNumber: route.routeNumber,
             company: route.company,
             direction: route.direction
         )
-        
-        navigationController?.pushViewController(stopETAVC, animated: true)
+
+        // Custom transition animation (same as SearchViewController)
+        let transition = CATransition()
+        transition.duration = 0.3
+        transition.type = .moveIn
+        transition.subtype = .fromRight
+        navigationController?.view.layer.add(transition, forKey: kCATransition)
+
+        navigationController?.pushViewController(routeDetailVC, animated: false)
     }
-    
+
     private func checkIfRouteIsFavorite(route: StopRoute) -> Bool {
         let busRoute = BusRoute(
             stopId: stopResult.stopId,
@@ -361,9 +404,9 @@ extension StopRoutesViewController: UITableViewDelegate {
         }
         
         // Reload the specific cell
-        if let cell = tableView.cellForRow(at: indexPath) as? StopRouteTableViewCell {
+        if let cell = tableView.cellForRow(at: indexPath) as? BusETATableViewCell {
             let isFavorite = checkIfRouteIsFavorite(route: route)
-            cell.updateFavoriteButton(isFavorite: isFavorite)
+            cell.setFavoriteState(isFavorite)
         }
     }
     
@@ -393,196 +436,6 @@ extension StopRoutesViewController: UITableViewDelegate {
     
     private func hideEmptyState() {
         emptyStateLabel.isHidden = true
-    }
-}
-
-// MARK: - Stop Route Table View Cell
-class StopRouteTableViewCell: UITableViewCell {
-    
-    static let identifier = "StopRouteTableViewCell"
-    
-    private let containerView = UIView()
-    private let routeLabel = UILabel()
-    private let companyLabel = UILabel()
-    private let destinationLabel = UILabel()
-    private let favoriteButton = UIButton(type: .system)
-    private let chevronImageView = UIImageView()
-    private let etaStackView = UIStackView()
-    
-    var onFavoriteButtonTapped: (() -> Void)?
-    
-    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-        super.init(style: style, reuseIdentifier: reuseIdentifier)
-        setupUI()
-    }
-    
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
-    private func setupUI() {
-        backgroundColor = UIColor.black
-        contentView.backgroundColor = UIColor.black
-        selectionStyle = .none
-        
-        containerView.backgroundColor = UIColor(white: 0.05, alpha: 1.0)
-        containerView.layer.cornerRadius = 8
-        containerView.translatesAutoresizingMaskIntoConstraints = false
-        
-        routeLabel.font = UIFont.monospacedSystemFont(ofSize: 32, weight: .semibold)
-        routeLabel.textColor = .white
-        routeLabel.adjustsFontSizeToFitWidth = true
-        routeLabel.minimumScaleFactor = 0.8
-        routeLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        companyLabel.font = UIFont.systemFont(ofSize: 12, weight: .medium)
-        companyLabel.textColor = .white
-        companyLabel.textAlignment = .center
-        companyLabel.layer.cornerRadius = 4
-        companyLabel.clipsToBounds = true
-        companyLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        destinationLabel.font = UIFont.systemFont(ofSize: 16)
-        destinationLabel.textColor = UIColor(white: 0.8, alpha: 1.0)
-        destinationLabel.numberOfLines = 2
-        destinationLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        favoriteButton.setImage(UIImage(systemName: "star"), for: .normal)
-        favoriteButton.setImage(UIImage(systemName: "star.fill"), for: .selected)
-        favoriteButton.tintColor = UIColor.systemYellow
-        favoriteButton.addTarget(self, action: #selector(favoriteButtonTapped), for: .touchUpInside)
-        favoriteButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        chevronImageView.image = UIImage(systemName: "chevron.right")
-        chevronImageView.tintColor = UIColor(white: 0.4, alpha: 1.0)
-        chevronImageView.translatesAutoresizingMaskIntoConstraints = false
-        
-        // ETA stack view
-        etaStackView.axis = .vertical
-        etaStackView.spacing = 2
-        etaStackView.alignment = .trailing
-        etaStackView.translatesAutoresizingMaskIntoConstraints = false
-        
-        contentView.addSubview(containerView)
-        containerView.addSubview(routeLabel)
-        containerView.addSubview(companyLabel)
-        containerView.addSubview(destinationLabel)
-        containerView.addSubview(favoriteButton)
-        containerView.addSubview(chevronImageView)
-        containerView.addSubview(etaStackView)
-        
-        NSLayoutConstraint.activate([
-            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
-            containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
-            
-            routeLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
-            routeLabel.centerYAnchor.constraint(equalTo: containerView.centerYAnchor, constant: -8),
-            routeLabel.widthAnchor.constraint(equalToConstant: 110),
-            
-            companyLabel.leadingAnchor.constraint(equalTo: routeLabel.trailingAnchor, constant: 8),
-            companyLabel.centerYAnchor.constraint(equalTo: routeLabel.centerYAnchor),
-            companyLabel.widthAnchor.constraint(equalToConstant: 50),
-            companyLabel.heightAnchor.constraint(equalToConstant: 20),
-            
-            destinationLabel.topAnchor.constraint(equalTo: routeLabel.bottomAnchor, constant: 4),
-            destinationLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 16),
-            destinationLabel.trailingAnchor.constraint(equalTo: etaStackView.leadingAnchor, constant: -12),
-            
-            etaStackView.trailingAnchor.constraint(equalTo: favoriteButton.leadingAnchor, constant: -8),
-            etaStackView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            etaStackView.widthAnchor.constraint(equalToConstant: 100),
-            
-            favoriteButton.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: -8),
-            favoriteButton.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            favoriteButton.widthAnchor.constraint(equalToConstant: 32),
-            favoriteButton.heightAnchor.constraint(equalToConstant: 32),
-            
-            chevronImageView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
-            chevronImageView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            chevronImageView.widthAnchor.constraint(equalToConstant: 12),
-            chevronImageView.heightAnchor.constraint(equalToConstant: 12)
-        ])
-    }
-    
-    func configure(with route: StopRoute, etas: [BusETA], isFavorite: Bool) {
-        routeLabel.text = route.routeNumber
-        companyLabel.text = route.company.rawValue
-        companyLabel.backgroundColor = companyColor(for: route.company)
-        destinationLabel.text = "往 \(route.destination)"
-        favoriteButton.isSelected = isFavorite
-        
-        // Update ETA display
-        updateETADisplay(etas: etas)
-    }
-    
-    private func updateETADisplay(etas: [BusETA]) {
-        // Clear previous ETA labels
-        etaStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
-        let etasToShow = Array(etas.prefix(3)) // Show up to 3 ETAs
-        
-        if etasToShow.isEmpty {
-            let noDataLabel = createETALabel(text: "未有資料", isFirst: true)
-            etaStackView.addArrangedSubview(noDataLabel)
-        } else {
-            for (index, eta) in etasToShow.enumerated() {
-                let etaLabel = createETALabel(text: eta.formattedETA, isFirst: index == 0)
-                etaStackView.addArrangedSubview(etaLabel)
-            }
-        }
-    }
-    
-    private func createETALabel(text: String, isFirst: Bool) -> UILabel {
-        let label = UILabel()
-        label.text = text
-        label.textAlignment = .right
-        label.numberOfLines = 1
-        label.adjustsFontSizeToFitWidth = true
-        label.minimumScaleFactor = 0.9
-        
-        // Check if it's "未有資料" and use gray color
-        if text == "未有資料" {
-            label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
-            label.textColor = UIColor.gray
-        } else if isFirst {
-            // First ETA - larger, more prominent
-            label.font = UIFont.systemFont(ofSize: 16, weight: .medium)
-            label.textColor = UIColor.systemTeal
-        } else {
-            // Other ETAs - smaller, subtle
-            label.font = UIFont.systemFont(ofSize: 12, weight: .medium)
-            label.textColor = UIColor.gray
-        }
-        
-        return label
-    }
-    
-    func updateFavoriteButton(isFavorite: Bool) {
-        favoriteButton.isSelected = isFavorite
-    }
-    
-    @objc private func favoriteButtonTapped() {
-        onFavoriteButtonTapped?()
-    }
-    
-    private func companyColor(for company: BusRoute.Company) -> UIColor {
-        switch company {
-        case .CTB, .NWFB:
-            return UIColor.systemYellow
-        case .KMB:
-            return UIColor.systemRed
-        }
-    }
-    
-    override func setHighlighted(_ highlighted: Bool, animated: Bool) {
-        super.setHighlighted(highlighted, animated: animated)
-        
-        UIView.animate(withDuration: 0.1) {
-            self.containerView.backgroundColor = highlighted ? 
-                UIColor(white: 0.1, alpha: 1.0) : UIColor(white: 0.05, alpha: 1.0)
-        }
     }
 }
 
