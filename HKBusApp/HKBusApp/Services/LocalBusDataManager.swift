@@ -18,53 +18,98 @@ class LocalBusDataManager {
     private init() {}
     
     // MARK: - Data Loading
-    
+
+    /// Get current loaded data version (for Firebase update check)
+    func getCurrentVersion() -> Int? {
+        guard loadBusData(), let data = busData else { return nil }
+        return data.version
+    }
+
     func loadBusData() -> Bool {
         if isLoaded, busData != nil {
             return true
         }
-        
-        guard let fileURL = Bundle.main.url(forResource: "bus_data", withExtension: "json") else {
-            print("❌ LocalBusDataManager: bus_data.json not found in bundle")
-            print("📁 Bundle資源: \(Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: nil) ?? [])")
+
+        // 優先從 Documents 目錄讀取（用戶下載的最新版本）
+        guard let fileURL = getBusDataURL() else {
+            print("❌ LocalBusDataManager: bus_data.json not found")
             return false
         }
-        
+
         do {
             let jsonData = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
             busData = try decoder.decode(LocalBusData.self, from: jsonData)
             isLoaded = true
-            
+
             print("✅ LocalBusDataManager: Loaded bus data successfully")
+            print("📁 Source: \(fileURL.path)")
+            if let version = busData?.version {
+                let date = Date(timeIntervalSince1970: TimeInterval(version))
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+                print("📅 Data version: \(version) (\(formatter.string(from: date)))")
+            }
             if let summary = busData?.summary {
                 print("📊 Routes: \(summary.totalRoutes), Stops: \(summary.totalStops)")
             }
-            
+
             return true
         } catch {
             print("❌ LocalBusDataManager: Failed to load bus data - \(error)")
             return false
         }
     }
+
+    /// 重新載入數據（用於 Firebase 更新後）
+    func reloadData() -> Bool {
+        isLoaded = false
+        busData = nil
+        cachedSortedRoutes = nil
+        print("🔄 LocalBusDataManager: Reloading data...")
+        return loadBusData()
+    }
+
+    // MARK: - Private Helpers
+
+    /// 獲取 bus_data.json 的 URL（優先從 Documents，降級到 Bundle）
+    private func getBusDataURL() -> URL? {
+        // 1. 先嘗試從 Documents 目錄讀取（用戶下載的最新版本）
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let downloadedFileURL = documentsURL.appendingPathComponent("bus_data.json")
+
+        if FileManager.default.fileExists(atPath: downloadedFileURL.path) {
+            print("📦 使用已下載的數據: Documents/bus_data.json")
+            return downloadedFileURL
+        }
+
+        // 2. 降級到 Bundle（初次安裝時的預置數據）
+        if let bundleURL = Bundle.main.url(forResource: "bus_data", withExtension: "json") {
+            print("📦 使用預置數據: Bundle/bus_data.json")
+            return bundleURL
+        }
+
+        print("❌ 找不到 bus_data.json (檢查了 Documents 和 Bundle)")
+        return nil
+    }
     
     // MARK: - Stop Search
     
-    func searchStops(query: String, limit: Int = 50) -> [StopSearchResult] {
+    func searchStops(query: String, location: CLLocation? = nil, limit: Int = 50) -> [StopSearchResult] {
         guard loadBusData(), let data = busData else { return [] }
-        
+
         let searchQuery = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !searchQuery.isEmpty else { return [] }
-        
+
         var results: [StopSearchResult] = []
-        
+
         for (stopId, stopInfo) in data.stops {
             let chineseName = stopInfo.nameTC.lowercased()
             let englishName = stopInfo.nameEN.lowercased()
-            
+
             if chineseName.contains(searchQuery) || englishName.contains(searchQuery) {
                 let routes = getRoutesForStop(stopId: stopId)
-                
+
                 let result = StopSearchResult(
                     stopId: stopId,
                     nameTC: stopInfo.nameTC,
@@ -74,14 +119,31 @@ class LocalBusDataManager {
                     routes: routes
                 )
                 results.append(result)
-                
+
                 if results.count >= limit {
                     break
                 }
             }
         }
-        
-        return results
+
+        // Sort results before returning
+        if let userLocation = location {
+            // Sort by distance when location available (nearest first)
+            results.sort { stop1, stop2 in
+                guard let lat1 = stop1.latitude, let lon1 = stop1.longitude,
+                      let lat2 = stop2.latitude, let lon2 = stop2.longitude else {
+                    return false
+                }
+                let distance1 = userLocation.distance(from: CLLocation(latitude: lat1, longitude: lon1))
+                let distance2 = userLocation.distance(from: CLLocation(latitude: lat2, longitude: lon2))
+                return distance1 < distance2
+            }
+        } else {
+            // Sort alphabetically by Chinese name when no location
+            results.sort { $0.nameTC < $1.nameTC }
+        }
+
+        return Array(results.prefix(limit))
     }
     
     func getNearbyStops(location: CLLocation, radiusKm: Double = 2.0, limit: Int = 15) -> [StopSearchResult] {
@@ -253,14 +315,16 @@ class LocalBusDataManager {
 // MARK: - Data Models
 
 struct LocalBusData: Codable {
+    let version: Int?  // Unix timestamp for version tracking (optional for backward compatibility)
     let generatedAt: String
     let routes: [String: LocalRouteInfo]
     let stops: [String: LocalStopInfo]
     let routeStops: [String: [LocalRouteStop]]
     let stopRoutes: [String: [LocalStopRouteInfo]]
     let summary: LocalDataSummary
-    
+
     enum CodingKeys: String, CodingKey {
+        case version
         case generatedAt = "generated_at"
         case routes, stops
         case routeStops = "route_stops"

@@ -25,7 +25,21 @@ class SearchViewController: UIViewController {
     private var isKeyboardVisible = false
     private var locationTimer: Timer?
     private var isUpdatingFromKeyboard = false  // Flag to prevent circular updates
-    
+    private var isCancellingSearch = false  // Flag to distinguish Cancel button from clear button
+
+    // MARK: - Loading & Empty States
+    private var isShowingLoading = false
+    private var searchEmptyMessage: String? = nil
+
+    // MARK: - Floating Refresh Button
+    private let floatingRefreshButton = UIButton(type: .system)
+    private var floatingButtonContainer: UIVisualEffectView!
+    private let floatingButtonLoadingIndicator = UIActivityIndicatorView(style: .medium)
+    private var lastManualRefreshTime: Date?
+    private let refreshCooldown: TimeInterval = 5.0
+    private var floatingButtonWidthConstraint: NSLayoutConstraint?
+    private var isFloatingButtonAnimating = false
+
     // Structure to track route with distance and stop name
     private struct RouteWithDistance {
         let stopRoute: StopRoute
@@ -44,6 +58,9 @@ class SearchViewController: UIViewController {
         setupCustomKeyboard()
         setupTapGesture()
         setupLocationManager()
+        setupFloatingRefreshButton()
+        layoutFloatingRefreshButton()
+        requestLocationPermission()
 
         // Immediately load nearby routes without waiting for GPS
         loadNearbyRoutesImmediately()
@@ -63,6 +80,7 @@ class SearchViewController: UIViewController {
 
     @objc private func fontSizeDidChange() {
         tableView.reloadData()
+        updateFloatingButtonFont()
     }
     
     // Show status bar to display clock and battery
@@ -149,6 +167,9 @@ class SearchViewController: UIViewController {
             customKeyboard.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor), // Above tab bar
             customKeyboard.heightAnchor.constraint(equalToConstant: 260)
         ])
+
+        // Ensure custom keyboard is always on top (covers floating button)
+        view.bringSubviewToFront(customKeyboard)
     }
     
     private func setupSearchBar() {
@@ -193,6 +214,25 @@ class SearchViewController: UIViewController {
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 100 // Only update if moved 100m
     }
+
+    private func requestLocationPermission() {
+        let status = locationManager.authorizationStatus
+        print("📱 路線頁面 - 位置權限狀態: \(status.rawValue)")
+
+        switch status {
+        case .notDetermined:
+            print("🔒 請求位置權限...")
+            locationManager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse, .authorizedAlways:
+            print("✅ 位置權限已授予，開始請求位置")
+            locationManager.requestLocation()
+        case .denied, .restricted:
+            print("⚠️ 位置權限被拒絕，將使用預設位置")
+            // loadNearbyRoutesImmediately() will handle fallback to Central HK
+        @unknown default:
+            print("⚠️ 未知位置權限狀態")
+        }
+    }
     
     private func setupTapGesture() {
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
@@ -212,9 +252,13 @@ class SearchViewController: UIViewController {
     
     private func showKeyboard() {
         guard !isKeyboardVisible else { return }
+
+        // Ensure keyboard is always on top before showing
+        view.bringSubviewToFront(customKeyboard)
+
         customKeyboard.show(animated: true)
         isKeyboardVisible = true
-        
+
         // Adjust table view insets when keyboard is shown
         updateTableViewInsets()
     }
@@ -233,21 +277,280 @@ class SearchViewController: UIViewController {
     
     private func updateTableViewInsets() {
         var bottomInset: CGFloat = 0
-        
+        let tabBarHeight = tabBarController?.tabBar.frame.height ?? 49
+        let floatingButtonPadding: CGFloat = 80
+
         if isKeyboardVisible {
             // When keyboard is visible, add keyboard height since it's now positioned above tab bar
             bottomInset = 260 // keyboard height (no extra margin needed since keyboard is above tab bar)
         } else {
-            // When keyboard is hidden, account for tab bar height
-            bottomInset = 0
+            // When keyboard is hidden, account for tab bar height and floating button
+            bottomInset = tabBarHeight + floatingButtonPadding
         }
-        
+
         UIView.animate(withDuration: 0.25) {
             self.tableView.contentInset.bottom = bottomInset
             self.tableView.verticalScrollIndicatorInsets.bottom = bottomInset
         }
     }
-    
+
+    // MARK: - Floating Refresh Button Setup
+
+    private func setupFloatingRefreshButton() {
+        // 1. Create shadow container view
+        let shadowView = UIView()
+        shadowView.translatesAutoresizingMaskIntoConstraints = false
+        shadowView.backgroundColor = .clear
+        shadowView.layer.cornerRadius = 24
+        shadowView.layer.shadowColor = UIColor.black.cgColor
+        shadowView.layer.shadowOffset = CGSize(width: 0, height: 4)
+        shadowView.layer.shadowOpacity = 0.15
+        shadowView.layer.shadowRadius = 8
+        shadowView.layer.masksToBounds = false
+        shadowView.tag = 998
+        view.addSubview(shadowView)
+
+        // 2. Create blur effect container
+        let blurEffect = UIBlurEffect(style: .systemThinMaterial)
+        floatingButtonContainer = UIVisualEffectView(effect: blurEffect)
+        floatingButtonContainer.translatesAutoresizingMaskIntoConstraints = false
+        floatingButtonContainer.layer.cornerRadius = 24
+        floatingButtonContainer.clipsToBounds = true
+        floatingButtonContainer.tag = 999
+        shadowView.addSubview(floatingButtonContainer)
+
+        // 3. Create vibrancy effect for enhanced glass effect
+        let vibrancyEffect = UIVibrancyEffect(blurEffect: blurEffect, style: .label)
+        let vibrancyView = UIVisualEffectView(effect: vibrancyEffect)
+        vibrancyView.translatesAutoresizingMaskIntoConstraints = false
+        floatingButtonContainer.contentView.addSubview(vibrancyView)
+
+        // 4. Configure button with dynamic font
+        var config = UIButton.Configuration.plain()
+        config.title = "重新整理"
+        config.image = UIImage(systemName: "arrow.clockwise")
+        config.imagePlacement = .leading
+        config.imagePadding = 6
+        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14)
+        config.baseForegroundColor = UIColor.label
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            let fontSize: CGFloat = FontSizeManager.shared.isLargeFontEnabled ? 18 : 16
+            outgoing.font = UIFont.systemFont(ofSize: fontSize, weight: .medium)
+            return outgoing
+        }
+        floatingRefreshButton.configuration = config
+        floatingRefreshButton.translatesAutoresizingMaskIntoConstraints = false
+        floatingRefreshButton.addTarget(self, action: #selector(floatingRefreshButtonTapped), for: .touchUpInside)
+
+        // 5. Configure loading indicator
+        floatingButtonLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        floatingButtonLoadingIndicator.hidesWhenStopped = true
+        floatingButtonLoadingIndicator.color = UIColor.label
+
+        // 6. Add button and indicator to vibrancy view
+        vibrancyView.contentView.addSubview(floatingRefreshButton)
+        vibrancyView.contentView.addSubview(floatingButtonLoadingIndicator)
+
+        // 7. Setup constraints (will be finalized in layoutFloatingRefreshButton)
+        NSLayoutConstraint.activate([
+            vibrancyView.topAnchor.constraint(equalTo: floatingButtonContainer.contentView.topAnchor),
+            vibrancyView.leadingAnchor.constraint(equalTo: floatingButtonContainer.contentView.leadingAnchor),
+            vibrancyView.trailingAnchor.constraint(equalTo: floatingButtonContainer.contentView.trailingAnchor),
+            vibrancyView.bottomAnchor.constraint(equalTo: floatingButtonContainer.contentView.bottomAnchor),
+
+            floatingRefreshButton.topAnchor.constraint(equalTo: vibrancyView.contentView.topAnchor),
+            floatingRefreshButton.leadingAnchor.constraint(equalTo: vibrancyView.contentView.leadingAnchor),
+            floatingRefreshButton.trailingAnchor.constraint(equalTo: vibrancyView.contentView.trailingAnchor),
+            floatingRefreshButton.bottomAnchor.constraint(equalTo: vibrancyView.contentView.bottomAnchor),
+
+            floatingButtonLoadingIndicator.centerXAnchor.constraint(equalTo: vibrancyView.contentView.centerXAnchor),
+            floatingButtonLoadingIndicator.centerYAnchor.constraint(equalTo: vibrancyView.contentView.centerYAnchor)
+        ])
+
+        // Initially hidden
+        shadowView.isHidden = true
+        shadowView.alpha = 0.95
+    }
+
+    private func layoutFloatingRefreshButton() {
+        guard let shadowView = view.viewWithTag(998),
+              let container = view.viewWithTag(999) as? UIVisualEffectView else {
+            return
+        }
+
+        shadowView.translatesAutoresizingMaskIntoConstraints = false
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        // Calculate bottom position relative to tab bar
+        let tabBarHeight = tabBarController?.tabBar.frame.height ?? 49
+        let widthConstraint = shadowView.widthAnchor.constraint(equalToConstant: 160)
+        floatingButtonWidthConstraint = widthConstraint
+
+        NSLayoutConstraint.activate([
+            shadowView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            shadowView.bottomAnchor.constraint(
+                equalTo: view.bottomAnchor,
+                constant: -(tabBarHeight + 16)
+            ),
+            widthConstraint,
+            shadowView.heightAnchor.constraint(equalToConstant: 48),
+
+            container.topAnchor.constraint(equalTo: shadowView.topAnchor),
+            container.leadingAnchor.constraint(equalTo: shadowView.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: shadowView.trailingAnchor),
+            container.bottomAnchor.constraint(equalTo: shadowView.bottomAnchor)
+        ])
+    }
+
+    // MARK: - Floating Button Actions
+
+    @objc private func floatingRefreshButtonTapped() {
+        guard !isFloatingButtonAnimating else {
+            print("🔒 按鈕動畫中，無法點擊")
+            return
+        }
+
+        guard canPerformManualRefresh() else {
+            print("⏰ 刷新冷卻中，請稍後再試")
+            return
+        }
+
+        print("🔄 浮動按鈕點擊 - 觸發刷新")
+
+        isFloatingButtonAnimating = true
+
+        // Animate button to circle with loading
+        animateButtonToCircle {
+            // Trigger refresh (reuse existing handleRefresh logic)
+            self.handleRefresh()
+        }
+
+        // Record refresh time
+        lastManualRefreshTime = Date()
+
+        // Reset animation flag after 4 seconds (3s loading + 1s cooldown)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            self.isFloatingButtonAnimating = false
+        }
+    }
+
+    private func animateButtonToCircle(completion: @escaping () -> Void) {
+        guard let widthConstraint = floatingButtonWidthConstraint else { return }
+
+        // 1. Shrink to circle (48px)
+        widthConstraint.constant = 48
+
+        // 2. Hide text and icon
+        var config = floatingRefreshButton.configuration
+        config?.title = ""
+        config?.image = nil
+        floatingRefreshButton.configuration = config
+
+        // 3. Show loading indicator
+        floatingButtonLoadingIndicator.startAnimating()
+
+        // 4. Animate with spring effect
+        UIView.animate(
+            withDuration: 0.3,
+            delay: 0,
+            usingSpringWithDamping: 0.7,
+            initialSpringVelocity: 0.5,
+            options: [.curveEaseInOut],
+            animations: {
+                self.view.layoutIfNeeded()
+            },
+            completion: { _ in
+                // Execute refresh
+                completion()
+
+                // Wait 3 seconds then expand back
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    self.animateButtonToNormal()
+                }
+            }
+        )
+    }
+
+    private func animateButtonToNormal() {
+        guard let widthConstraint = floatingButtonWidthConstraint else { return }
+
+        // 1. Stop loading indicator
+        floatingButtonLoadingIndicator.stopAnimating()
+
+        // 2. Expand to normal size (160px)
+        widthConstraint.constant = 160
+
+        // 3. Restore text and icon
+        var config = floatingRefreshButton.configuration
+        config?.title = "重新整理"
+        config?.image = UIImage(systemName: "arrow.clockwise")
+        floatingRefreshButton.configuration = config
+
+        // 4. Animate with spring effect
+        UIView.animate(
+            withDuration: 0.3,
+            delay: 0,
+            usingSpringWithDamping: 0.7,
+            initialSpringVelocity: 0.5,
+            options: [.curveEaseInOut],
+            animations: {
+                self.view.layoutIfNeeded()
+            }
+        )
+    }
+
+    private func canPerformManualRefresh() -> Bool {
+        guard let lastRefresh = lastManualRefreshTime else {
+            return true
+        }
+
+        let timeSinceLastRefresh = Date().timeIntervalSince(lastRefresh)
+        return timeSinceLastRefresh >= refreshCooldown
+    }
+
+    private func showFloatingButton(animated: Bool) {
+        guard let shadowView = view.viewWithTag(998) else { return }
+
+        if animated {
+            UIView.animate(withDuration: 0.3) {
+                shadowView.isHidden = false
+                shadowView.alpha = 0.95
+            }
+        } else {
+            shadowView.isHidden = false
+            shadowView.alpha = 0.95
+        }
+    }
+
+    private func hideFloatingButton(animated: Bool) {
+        guard let shadowView = view.viewWithTag(998) else { return }
+
+        if animated {
+            UIView.animate(withDuration: 0.3) {
+                shadowView.alpha = 0
+            } completion: { _ in
+                shadowView.isHidden = true
+            }
+        } else {
+            shadowView.isHidden = true
+            shadowView.alpha = 0
+        }
+    }
+
+    private func updateFloatingButtonFont() {
+        guard var config = floatingRefreshButton.configuration else { return }
+
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            let fontSize: CGFloat = FontSizeManager.shared.isLargeFontEnabled ? 18 : 16
+            outgoing.font = UIFont.systemFont(ofSize: fontSize, weight: .medium)
+            return outgoing
+        }
+
+        floatingRefreshButton.configuration = config
+    }
+
     @objc private func handleRefresh() {
         print("🔄 用戶下拉刷新附近路線")
         
@@ -469,6 +772,12 @@ class SearchViewController: UIViewController {
         
         // Step 5: Update UI immediately
         DispatchQueue.main.async {
+            // Re-add refresh control when showing nearby routes
+            self.tableView.refreshControl = self.refreshControl
+
+            // Show floating button when displaying nearby routes
+            self.showFloatingButton(animated: true)
+
             self.tableView.reloadData()
             print("📱 附近路線顯示完成，開始載入ETA...")
             // Step 6: Load ETAs after UI update
@@ -631,30 +940,35 @@ class SearchViewController: UIViewController {
 
     
     private func performSearch(for query: String) {
-        // Verify state consistency before searching
+        // Verify and update state consistency before searching
         let searchBarText = searchBar.text ?? ""
+
+        // If query doesn't match currentSearchText, update it directly (no recursion)
         if query != currentSearchText {
-            print("⚠️ 搜尋一致性警告 - query: '\(query)', currentSearchText: '\(currentSearchText)'")
-            // Use currentSearchText as source of truth
-            if !currentSearchText.isEmpty && currentSearchText != query {
-                print("🔧 使用 currentSearchText 作為真實來源: '\(currentSearchText)'")
-                performSearch(for: currentSearchText)
-                return
-            }
+            print("⚠️ performSearch 參數不一致 - 更新 currentSearchText 為: '\(query)'")
+            currentSearchText = query
         }
 
+        // If query doesn't match searchBar, update searchBar
         if query != searchBarText {
-            print("⚠️ 搜尋一致性警告 - query: '\(query)', searchBar.text: '\(searchBarText)'")
+            print("⚠️ performSearch 與 searchBar 不一致 - 更新 searchBar 為: '\(query)'")
+            updateSearchBar()
         }
 
         // Only search if query has meaningful content (at least 1 character)
         guard query.count >= 1 else {
             // Show initial routes when no search query
             routeSearchResults = []
+
+            // Re-add refresh control when returning to nearby routes mode
+            tableView.refreshControl = refreshControl
+
+            // Show floating button when showing nearby routes
+            showFloatingButton(animated: true)
+
             if let location = currentLocation {
                 loadRoutesFromNearbyStops(location: location)
             } else {
-                // Reload nearby routes immediately
                 loadNearbyRoutesImmediately()
             }
             return
@@ -665,32 +979,59 @@ class SearchViewController: UIViewController {
     
     private func searchRoutes(query: String) {
         guard !isLoading && !query.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        
+
         isLoading = true
-        
+
         // Show loading state
         DispatchQueue.main.async {
-            // Could add loading indicator here
+            self.isShowingLoading = true
+            self.searchEmptyMessage = nil
+            self.tableView.reloadData()
         }
-        
+
         apiService.searchRoutes(routeNumber: query) { [weak self] result in
             DispatchQueue.main.async {
                 self?.isLoading = false
-                
+                self?.isShowingLoading = false
+
                 switch result {
                 case .success(let results):
                     print("搜尋結果: \(results.count) 個路線")
-                    self?.routeSearchResults = results
-                    self?.busDisplayData = [] // Clear initial routes when showing search results
-                    self?.tableView.reloadData()
-                    
-                    // Scroll to top to show search results from the beginning
-                    if !results.isEmpty {
-                        self?.tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
+
+                    if results.isEmpty {
+                        // Show empty state message
+                        self?.searchEmptyMessage = "沒有找到路線「\(query)」"
+                        self?.routeSearchResults = []
+                    } else {
+                        // Show search results
+                        self?.searchEmptyMessage = nil
+                        self?.routeSearchResults = results
                     }
+
+                    self?.busDisplayData = [] // Clear initial routes when showing search results
+
+                    // Remove refresh control when showing search results
+                    self?.tableView.refreshControl = nil
+
+                    // Hide floating button when showing search results
+                    self?.hideFloatingButton(animated: true)
+
+                    // Force reload table view data
+                    self?.tableView.reloadData()
+
+                    // Ensure reload completes before scrolling
+                    DispatchQueue.main.async {
+                        if !results.isEmpty {
+                            self?.tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
+                        }
+                    }
+
                 case .failure(let error):
                     print("搜尋錯誤: \(error.localizedDescription)")
+                    self?.searchEmptyMessage = "搜尋時發生錯誤"
                     self?.routeSearchResults = []
+
+                    // Reload table view even on failure
                     self?.tableView.reloadData()
                 }
             }
@@ -703,7 +1044,7 @@ class SearchViewController: UIViewController {
 extension SearchViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
         // If update is from custom keyboard, skip to prevent circular updates
-        if isUpdatingFromKeyboard {
+        guard !isUpdatingFromKeyboard else {
             print("⏭️ textDidChange 跳過 - 來自自定義鍵盤更新")
             return
         }
@@ -729,6 +1070,17 @@ extension SearchViewController: UISearchBarDelegate {
 
         guard hasText else {
             routeSearchResults = []
+
+            // Re-add refresh control when returning to nearby routes mode
+            tableView.refreshControl = refreshControl
+
+            // Load nearby routes when search is cleared
+            if let location = currentLocation {
+                loadRoutesFromNearbyStops(location: location)
+            } else {
+                loadNearbyRoutesImmediately()
+            }
+
             tableView.reloadData()
             return
         }
@@ -747,6 +1099,9 @@ extension SearchViewController: UISearchBarDelegate {
     }
     
     func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        // Set flag to allow keyboard dismissal
+        isCancellingSearch = true
+
         // Clear all search-related data - ensure both states are reset
         searchBar.text = ""
         currentSearchText = ""
@@ -764,6 +1119,9 @@ extension SearchViewController: UISearchBarDelegate {
             hideKeyboard()
         }
 
+        // Re-add refresh control when returning to nearby routes mode
+        tableView.refreshControl = refreshControl
+
         // Reload nearby routes to restore the initial state
         loadNearbyRoutesImmediately()
 
@@ -779,7 +1137,14 @@ extension SearchViewController: UISearchBarDelegate {
     }
     
     func searchBarShouldEndEditing(_ searchBar: UISearchBar) -> Bool {
-        return true
+        // Only allow keyboard dismissal when Cancel button is clicked
+        // Prevent keyboard from closing when clear button (x) is tapped
+        return isCancellingSearch
+    }
+
+    func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
+        // Reset flag after keyboard dismissal is complete
+        isCancellingSearch = false
     }
 }
 
@@ -790,14 +1155,38 @@ extension SearchViewController: UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        if !routeSearchResults.isEmpty {
+        if isShowingLoading || searchEmptyMessage != nil {
+            return 1 // Show loading or empty state cell
+        } else if !routeSearchResults.isEmpty {
             return routeSearchResults.count
         } else {
             return busDisplayData.count
         }
     }
-    
+
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        // Show loading cell
+        if isShowingLoading {
+            let cell = UITableViewCell(style: .default, reuseIdentifier: "loading")
+            cell.textLabel?.text = "搜尋中..."
+            cell.textLabel?.textAlignment = .center
+            cell.textLabel?.textColor = .secondaryLabel
+            cell.selectionStyle = .none
+            cell.backgroundColor = .systemBackground
+            return cell
+        }
+
+        // Show empty state cell
+        if let emptyMessage = searchEmptyMessage {
+            let cell = UITableViewCell(style: .default, reuseIdentifier: "empty")
+            cell.textLabel?.text = emptyMessage
+            cell.textLabel?.textAlignment = .center
+            cell.textLabel?.textColor = .secondaryLabel
+            cell.selectionStyle = .none
+            cell.backgroundColor = .systemBackground
+            return cell
+        }
+
         // If showing search results, use SearchResultTableViewCell
         if !routeSearchResults.isEmpty {
             guard let cell = tableView.dequeueReusableCell(withIdentifier: SearchResultTableViewCell.identifier, for: indexPath) as? SearchResultTableViewCell else {
@@ -889,27 +1278,29 @@ extension SearchViewController: UITableViewDelegate {
     }
     
     private func showDirectionSelection(for routeResult: RouteSearchResult, sourceRect: CGRect) {
-        let actionSheet = UIAlertController(title: "\(routeResult.company.rawValue) \(routeResult.routeNumber)", 
-                                          message: "請選擇路線方向", 
+        let actionSheet = UIAlertController(title: "\(routeResult.company.rawValue) \(routeResult.routeNumber)",
+                                          message: "請選擇路線方向",
                                           preferredStyle: .actionSheet)
-        
+
         for direction in routeResult.directions {
-            let action = UIAlertAction(title: direction.displayText, style: .default) { _ in
-                self.showRouteDetail(routeNumber: routeResult.routeNumber, 
-                                   company: routeResult.company, 
+            // Only show destination without origin - simpler and cleaner
+            let title = "→ \(direction.destination)"
+            let action = UIAlertAction(title: title, style: .default) { _ in
+                self.showRouteDetail(routeNumber: routeResult.routeNumber,
+                                   company: routeResult.company,
                                    direction: direction.direction)
             }
             actionSheet.addAction(action)
         }
-        
+
         actionSheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        
+
         // For iPad
         if let popover = actionSheet.popoverPresentationController {
             popover.sourceView = tableView
             popover.sourceRect = sourceRect
         }
-        
+
         present(actionSheet, animated: true)
     }
     
@@ -981,7 +1372,16 @@ extension SearchViewController: BusRouteKeyboardDelegate {
         // Debounce search to avoid excessive API calls (same 0.3s as textDidChange)
         searchTimer?.invalidate()
         searchTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
-            self?.performSearchWithCurrentText()
+            guard let self = self else { return }
+
+            // Verify state consistency before searching
+            let searchBarText = self.searchBar.text ?? ""
+            if searchBarText != self.currentSearchText {
+                print("⚠️ 計時器觸發時狀態不一致 - searchBar: '\(searchBarText)', currentText: '\(self.currentSearchText)'")
+                self.updateSearchBar()
+            }
+
+            self.performSearchWithCurrentText()
         }
     }
 
@@ -995,7 +1395,16 @@ extension SearchViewController: BusRouteKeyboardDelegate {
         // Debounce search to avoid excessive API calls (same 0.3s as textDidChange)
         searchTimer?.invalidate()
         searchTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
-            self?.performSearchWithCurrentText()
+            guard let self = self else { return }
+
+            // Verify state consistency before searching
+            let searchBarText = self.searchBar.text ?? ""
+            if searchBarText != self.currentSearchText {
+                print("⚠️ 計時器觸發時狀態不一致 - searchBar: '\(searchBarText)', currentText: '\(self.currentSearchText)'")
+                self.updateSearchBar()
+            }
+
+            self.performSearchWithCurrentText()
         }
     }
     
@@ -1025,6 +1434,10 @@ extension SearchViewController: BusRouteKeyboardDelegate {
             } else {
                 // Clear search results immediately when empty
                 routeSearchResults = []
+
+                // Re-add refresh control when returning to nearby routes mode
+                tableView.refreshControl = refreshControl
+
                 tableView.reloadData()
             }
         } else if !searchBarText.isEmpty {
@@ -1050,6 +1463,11 @@ extension SearchViewController: BusRouteKeyboardDelegate {
     
     
     private func updateSearchBar() {
+        // Use defer to ensure flag is reset synchronously when function exits
+        defer {
+            isUpdatingFromKeyboard = false
+        }
+
         // Set flag to prevent textDidChange from triggering
         isUpdatingFromKeyboard = true
 
@@ -1058,11 +1476,6 @@ extension SearchViewController: BusRouteKeyboardDelegate {
         // Update cancel button visibility based on text content
         let hasText = !currentSearchText.trimmingCharacters(in: .whitespaces).isEmpty
         searchBar.setShowsCancelButton(hasText, animated: true)
-
-        // Reset flag after a short delay to allow textDidChange to complete
-        DispatchQueue.main.async {
-            self.isUpdatingFromKeyboard = false
-        }
     }
     
     private func syncSearchStates() {
@@ -1081,13 +1494,14 @@ extension SearchViewController: BusRouteKeyboardDelegate {
             // Reset keyboard to show all buttons
             customKeyboard.resetAllButtons()
 
-            // Only load nearby routes if we don't have any display data
-            if busDisplayData.isEmpty {
-                if let location = currentLocation {
-                    loadRoutesFromNearbyStops(location: location)
-                } else {
-                    loadNearbyRoutesImmediately()
-                }
+            // Re-add refresh control when returning to nearby routes mode
+            tableView.refreshControl = refreshControl
+
+            // Always reload nearby routes to ensure data consistency
+            if let location = currentLocation {
+                loadRoutesFromNearbyStops(location: location)
+            } else {
+                loadNearbyRoutesImmediately()
             }
 
             searchBar.setShowsCancelButton(false, animated: false)
@@ -1100,13 +1514,14 @@ extension SearchViewController: BusRouteKeyboardDelegate {
             // Reset keyboard to show all buttons
             customKeyboard.resetAllButtons()
 
-            // Reload nearby routes only if needed
-            if busDisplayData.isEmpty {
-                if let location = currentLocation {
-                    loadRoutesFromNearbyStops(location: location)
-                } else {
-                    loadNearbyRoutesImmediately()
-                }
+            // Re-add refresh control when returning to nearby routes mode
+            tableView.refreshControl = refreshControl
+
+            // Always reload nearby routes to ensure data consistency
+            if let location = currentLocation {
+                loadRoutesFromNearbyStops(location: location)
+            } else {
+                loadNearbyRoutesImmediately()
             }
 
             searchBar.setShowsCancelButton(false, animated: false)
@@ -1143,7 +1558,7 @@ extension SearchViewController: BusRouteKeyboardDelegate {
         if isFavorite {
             favoritesManager.removeFavorite(busRoute)
         } else {
-            favoritesManager.addFavorite(busRoute)
+            favoritesManager.addFavorite(busRoute, subTitle: "我的")
         }
 
         // Reload the table to update favorite state
@@ -1189,17 +1604,19 @@ extension SearchViewController: CLLocationManagerDelegate {
     }
     
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        switch manager.authorizationStatus {
+        let status = manager.authorizationStatus
+        print("📱 路線頁面 - 位置權限狀態變更: \(status.rawValue)")
+
+        switch status {
         case .authorizedWhenInUse, .authorizedAlways:
             print("✅ 獲得位置權限，開始請求位置")
             manager.requestLocation()
-            startLocationTimeout() // Add timeout for this request too
+            startLocationTimeout()
         case .denied, .restricted:
-            print("⚠️ 位置權限被拒絕，保持顯示默認路線")
-            // Don't reload default routes, they're already showing
+            print("⚠️ 位置權限被拒絕，保持顯示預設路線（Central HK）")
+            // loadNearbyRoutesImmediately() already handles fallback to Central HK
         case .notDetermined:
-            print("📍 位置權限待定")
-            break
+            print("📍 位置權限待定，等待用戶決定")
         @unknown default:
             print("⚠️ 未知位置權限狀態")
         }

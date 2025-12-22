@@ -129,25 +129,30 @@ class StopSearchResultTableViewCell: UITableViewCell {
     }
     
     // MARK: - Configuration
-    func configure(with stopResult: StopSearchResult, distance: String? = nil) {
+    func configure(with stopResult: StopSearchResult, distance: String? = nil, cachedRouteText: String? = nil) {
         stopNameLabel.text = stopResult.displayName
-        
-        // Show route numbers in one line, with smart truncation
-        if stopResult.routes.isEmpty {
-            routesLabel.text = "無路線數據"
+
+        // Use cached route text if available (performance optimization)
+        if let cachedText = cachedRouteText {
+            routesLabel.text = cachedText
         } else {
-            let routeNumbers = stopResult.routes.map { $0.routeNumber }.sorted()
-            let routeText = routeNumbers.joined(separator: ", ")
-            
-            // If too many routes, show first few and add count
-            if routeNumbers.count > 8 {
-                let firstRoutes = Array(routeNumbers.prefix(8))
-                routesLabel.text = "\(firstRoutes.joined(separator: ", ")) 等\(routeNumbers.count)條路線"
+            // Fallback: Calculate route text (only if cache miss)
+            if stopResult.routes.isEmpty {
+                routesLabel.text = "無路線數據"
             } else {
-                routesLabel.text = routeText
+                let routeNumbers = stopResult.routes.map { $0.routeNumber }.sorted()
+                let routeText = routeNumbers.joined(separator: ", ")
+
+                // If too many routes, show first few and add count
+                if routeNumbers.count > 8 {
+                    let firstRoutes = Array(routeNumbers.prefix(8))
+                    routesLabel.text = "\(firstRoutes.joined(separator: ", ")) 等\(routeNumbers.count)條路線"
+                } else {
+                    routesLabel.text = routeText
+                }
             }
         }
-        
+
         // Show only distance
         distanceLabel.text = distance ?? ""
     }
