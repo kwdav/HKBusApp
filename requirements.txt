@@ -1,0 +1,11 @@
+# Python dependencies for HK Bus Data Collection Script
+# Install with: pip3 install -r requirements.txt
+
+# HTTP requests for API calls
+requests==2.31.0
+
+# Firebase Admin SDK for Storage upload
+firebase-admin==6.3.0
+
+# Environment variable management
+python-dotenv==1.0.0

@@ -1,13 +1,15 @@
 import UIKit
 
 class MainTabBarController: UITabBarController {
-    
+
     private var previousSelectedIndex: Int = 0
-    
+    private let lastSelectedTabKey = "lastSelectedTabIndex"
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupTabBar()
         setupViewControllers()
+        setInitialTab()
     }
     
     private func setupTabBar() {
@@ -46,8 +48,8 @@ class MainTabBarController: UITabBarController {
         let searchVC = SearchViewController()
         searchVC.tabBarItem = UITabBarItem(
             title: "路線",
-            image: UIImage(systemName: "bus"),
-            selectedImage: UIImage(systemName: "bus.fill")
+            image: UIImage(systemName: "bus.fill"),
+            selectedImage: UIImage(systemName: "bus")
         )
 
         let stopSearchVC = StopSearchViewController()
@@ -66,34 +68,43 @@ class MainTabBarController: UITabBarController {
         
         viewControllers = [busListNavController, searchNavController, stopSearchNavController]
     }
-    
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        
-        // Check if BusListViewController has any favorites/data
-        checkAndSetInitialTab()
-    }
-    
-    private func checkAndSetInitialTab() {
-        // Check if there are any favorites
-        let favoritesCount = FavoritesManager.shared.getAllFavorites().count
-        let hasSetInitialTab = UserDefaults.standard.bool(forKey: "hasSetInitialTab")
-        
-        if favoritesCount == 0 && !hasSetInitialTab {
-            // No favorites on first launch, switch to route search tab (index 1)
-            print("📱 沒有收藏路線，自動切換到路線搜尋頁面")
-            selectedIndex = 1
-            UserDefaults.standard.set(true, forKey: "hasSetInitialTab")
-        } else if favoritesCount > 0 && !hasSetInitialTab {
-            print("📱 有 \(favoritesCount) 個收藏路線，保持在巴士時間頁面")
-            UserDefaults.standard.set(true, forKey: "hasSetInitialTab")
+
+    private func setInitialTab() {
+        // Check if we have saved a tab selection before
+        if let savedTab = UserDefaults.standard.object(forKey: lastSelectedTabKey) as? Int {
+            // User has used the app before - restore last selected tab
+            // Validate tab index
+            if savedTab >= 0 && savedTab < (viewControllers?.count ?? 0) {
+                selectedIndex = savedTab
+
+                // Reset to root page for the selected tab
+                if let navController = viewControllers?[savedTab] as? UINavigationController {
+                    navController.popToRootViewController(animated: false)
+                }
+
+                print("📱 恢復上次使用的 tab: \(savedTab)")
+            } else {
+                // Invalid index, default to "我的" tab
+                selectedIndex = 0
+                print("📱 無效的 tab index，預設打開「我的」")
+            }
+        } else {
+            // First time launch - never saved a tab before
+            let hasFavorites = !FavoritesManager.shared.getAllFavorites().isEmpty
+
+            if hasFavorites {
+                // Has favorites but never launched - default to "我的" tab
+                selectedIndex = 0
+                print("📱 首次啟動，有收藏路線，打開「我的」tab")
+            } else {
+                // No favorites - open "路線" tab for discovery
+                selectedIndex = 1
+                print("📱 首次啟動，未有收藏路線，打開「路線」tab")
+            }
+
+            // Save initial tab selection
+            UserDefaults.standard.set(selectedIndex, forKey: lastSelectedTabKey)
         }
-        // If hasSetInitialTab is true, do nothing (user has already seen the initial behavior)
-    }
-    
-    // Public method to reset initial tab behavior when all favorites are deleted
-    func resetInitialTabBehavior() {
-        UserDefaults.standard.set(false, forKey: "hasSetInitialTab")
     }
     
     private func setupNavigationBarAppearance(for navigationController: UINavigationController) {
@@ -179,10 +190,13 @@ extension MainTabBarController: UITabBarControllerDelegate {
     
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         let newIndex = viewControllers?.firstIndex(of: viewController) ?? 0
-        
+
+        // Save selected tab to UserDefaults for next app launch
+        UserDefaults.standard.set(newIndex, forKey: lastSelectedTabKey)
+
         // 首次切換到路線搜尋頁面時不自動 focus
         // 只有重複點擊（在 shouldSelect 中處理）才會觸發鍵盤
-        
+
         // Update previous selected index
         previousSelectedIndex = newIndex
     }

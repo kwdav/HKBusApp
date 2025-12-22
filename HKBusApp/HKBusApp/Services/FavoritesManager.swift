@@ -4,15 +4,17 @@ import UIKit
 
 class FavoritesManager {
     static let shared = FavoritesManager()
-    
+
+    // Notification name for favorites changes
+    static let favoritesDidChangeNotification = Notification.Name("FavoritesDidChangeNotification")
+
     private let coreDataStack = CoreDataStack.shared
     private var context: NSManagedObjectContext {
         return coreDataStack.viewContext
     }
-    
+
     private init() {
-        // Initialize with default routes if no favorites exist
-        initializeDefaultFavoritesIfNeeded()
+        // No automatic initialization - let users build their own favorites
     }
     
     // MARK: - Favorites Management
@@ -20,7 +22,7 @@ class FavoritesManager {
     func getAllFavorites() -> [BusRoute] {
         let request: NSFetchRequest<BusRouteFavorite> = BusRouteFavorite.fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(key: "displayOrder", ascending: true)]
-        
+
         do {
             let favorites = try context.fetch(request)
             return favorites.map { favorite in
@@ -34,7 +36,7 @@ class FavoritesManager {
             }
         } catch {
             print("Error fetching favorites: \(error)")
-            return BusRouteConfiguration.defaultRoutes
+            return []
         }
     }
     
@@ -43,7 +45,7 @@ class FavoritesManager {
         if isFavorite(busRoute) {
             return
         }
-        
+
         let favorite = BusRouteFavorite(context: context)
         favorite.stopId = busRoute.stopId
         favorite.route = busRoute.route
@@ -52,8 +54,11 @@ class FavoritesManager {
         favorite.subTitle = subTitle
         favorite.dateAdded = Date()
         favorite.displayOrder = Int32(getNextDisplayOrder())
-        
+
         saveContext()
+
+        // Notify observers that favorites have changed
+        NotificationCenter.default.post(name: FavoritesManager.favoritesDidChangeNotification, object: nil)
     }
     
     func removeFavorite(_ busRoute: BusRoute) {
@@ -62,11 +67,14 @@ class FavoritesManager {
             format: "stopId == %@ AND route == %@ AND companyId == %@ AND direction == %@",
             busRoute.stopId, busRoute.route, busRoute.companyId, busRoute.direction
         )
-        
+
         do {
             let favorites = try context.fetch(request)
             favorites.forEach { context.delete($0) }
             saveContext()
+
+            // Notify observers that favorites have changed
+            NotificationCenter.default.post(name: FavoritesManager.favoritesDidChangeNotification, object: nil)
         } catch {
             print("Error removing favorite: \(error)")
         }

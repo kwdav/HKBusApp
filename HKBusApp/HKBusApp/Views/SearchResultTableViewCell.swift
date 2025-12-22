@@ -58,12 +58,20 @@ class SearchResultTableViewCell: UITableViewCell {
         titleLabel.textColor = UIColor.label
         titleLabel.numberOfLines = 1
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        // Ensure route number never gets compressed
+        titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         // Subtitle label
         subtitleLabel.font = UIFont.appDestination
-        subtitleLabel.textColor = UIColor.secondaryLabel
+        // WCAG AAA compliant colors: 85% opacity for slightly lighter appearance while maintaining 7.0:1+ contrast
+        subtitleLabel.textColor = UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark
+                ? UIColor.white.withAlphaComponent(0.85) // 85% white in dark mode - contrast ratio ~7.3:1
+                : UIColor.black.withAlphaComponent(0.85) // 85% black in light mode - contrast ratio ~7.3:1
+        }
         subtitleLabel.numberOfLines = 2
         subtitleLabel.textAlignment = .right
+        subtitleLabel.lineBreakMode = .byTruncatingTail // Truncate long text instead of wrapping
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         
         contentView.addSubview(containerView)
@@ -96,12 +104,12 @@ class SearchResultTableViewCell: UITableViewCell {
     
     func configure(with searchResult: SearchResult) {
         titleLabel.text = searchResult.title
-        
-        // Format directions as two lines instead of one line with " | "
+
+        // Format directions as simplified "→ destination" format
         if let routeResult = searchResult.routeSearchResult {
-            let directions = routeResult.directions.map { $0.displayText }
+            let directions = routeResult.directions.map { "→ \($0.destination)" }
             subtitleLabel.text = directions.joined(separator: "\n")
-            
+
             switch routeResult.company {
             case .KMB:
                 companyIndicator.backgroundColor = UIColor.systemRed

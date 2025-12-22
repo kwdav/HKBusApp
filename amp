@@ -1,0 +1,8 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -workspace ./HKBusApp/HKBusApp.xcworkspace -scheme HKBusApp -destination "platform=iOS Simulator,name=iPhone 16" clean build 2
+
+User defaults from command line:
+    IDEPackageSupportUseBuiltinSCM = YES
+
+2025-12-18 09:58:42.265 xcodebuild[37175:68308043] Writing error result bundle to /var/folders/25/t32x3qq91z7242m21p9zhf6w0000gn/T/ResultBundle_2025-18-12_09-58-0042.xcresult
+xcodebuild: error: Unknown build action '2'.

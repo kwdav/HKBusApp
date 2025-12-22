@@ -4,6 +4,8 @@ class SettingsViewController: UIViewController {
 
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
     private let tapDetector = DeveloperToolsManager.TapDetector()
+    private var hasNewVersionAvailable: Bool = false
+    private var lastUpdateStatus: String = "檢查中..."
 
     // Section identifiers
     private enum Section: Int, CaseIterable {
@@ -24,11 +26,67 @@ class SettingsViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
         setupTableView()
+        setupNotifications()
+        checkDataVersion()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    private func setupNotifications() {
+        // 監聽新版本可用通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleNewVersionAvailable),
+            name: NSNotification.Name("NewVersionAvailable"),
+            object: nil
+        )
+    }
+
+    @objc private func handleNewVersionAvailable() {
+        hasNewVersionAvailable = true
+        tableView.reloadData()
+    }
+
+    private func checkDataVersion() {
+        let localVersion = UserDefaults.standard.double(forKey: "com.hkbusapp.localBusDataVersion")
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        if localVersion > 0 {
+            // Downloaded version
+            let date = Date(timeIntervalSince1970: localVersion)
+            lastUpdateStatus = "數據版本: \(formatter.string(from: date))"
+        } else {
+            // Bundle version - get from bus_data.json metadata
+            if let bundleVersion = getBundleDataVersion() {
+                let date = Date(timeIntervalSince1970: bundleVersion)
+                lastUpdateStatus = "數據版本: \(formatter.string(from: date))"
+            } else {
+                lastUpdateStatus = "數據版本: 未知"
+            }
+        }
+    }
+
+    private func getBundleDataVersion() -> TimeInterval? {
+        guard let bundleURL = Bundle.main.url(forResource: "bus_data", withExtension: "json"),
+              let data = try? Data(contentsOf: bundleURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let metadata = json["metadata"] as? [String: Any],
+              let version = metadata["version"] as? TimeInterval else {
+            return nil
+        }
+        return version
     }
 
     private func setupUI() {
         title = "設定"
         view.backgroundColor = UIColor.systemGroupedBackground
+
+        // Show navigation bar with back button
+        navigationController?.setNavigationBarHidden(false, animated: false)
 
         // Setup table view
         tableView.translatesAutoresizingMaskIntoConstraints = false
@@ -46,6 +104,7 @@ class SettingsViewController: UIViewController {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.backgroundColor = UIColor.systemGroupedBackground
+        // Use .value1 style to show detail text on the right
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "SettingsCell")
         tableView.register(SegmentedControlCell.self, forCellReuseIdentifier: "SegmentedControlCell")
     }
@@ -54,26 +113,33 @@ class SettingsViewController: UIViewController {
 
     @objc private func updateRouteData() {
         // Show loading indicator
-        let loadingAlert = UIAlertController(title: "更新中", message: "正在下載最新巴士數據...", preferredStyle: .alert)
+        let loadingAlert = UIAlertController(title: "檢查更新", message: "正在檢查是否有新版本...", preferredStyle: .alert)
         present(loadingAlert, animated: true)
 
-        StopDataManager.shared.forceUpdateData { [weak self] result in
-            DispatchQueue.main.async {
-                loadingAlert.dismiss(animated: true) {
-                    switch result {
-                    case .success(let stopData):
+        // First check if update is needed (downloads small metadata file only)
+        FirebaseDataManager.shared.checkForUpdates(forceCheck: true) { [weak self] result in
+            switch result {
+            case .success(let hasUpdate):
+                if hasUpdate {
+                    // Update available, proceed with download
+                    DispatchQueue.main.async {
+                        loadingAlert.message = "正在下載最新巴士數據..."
+                    }
+                    self?.performDataDownload(loadingAlert: loadingAlert)
+                } else {
+                    // Already up to date
+                    DispatchQueue.main.async {
+                        loadingAlert.dismiss(animated: true) {
+                            self?.showToast(message: "已是最新版本")
+                        }
+                    }
+                }
+            case .failure:
+                DispatchQueue.main.async {
+                    loadingAlert.dismiss(animated: true) {
                         let alert = UIAlertController(
-                            title: "更新成功",
-                            message: "站點資料已更新至最新版本\n包含 \(stopData.stopList.count) 個巴士站",
-                            preferredStyle: .alert
-                        )
-                        alert.addAction(UIAlertAction(title: "確定", style: .default))
-                        self?.present(alert, animated: true)
-
-                    case .failure(let error):
-                        let alert = UIAlertController(
-                            title: "更新失敗",
-                            message: "無法更新站點資料，請檢查網路連線並稍後再試\n\n錯誤：\(error.localizedDescription)",
+                            title: "檢查失敗",
+                            message: "無法檢查更新，請檢查網路連線並稍後再試",
                             preferredStyle: .alert
                         )
                         alert.addAction(UIAlertAction(title: "確定", style: .default))
@@ -82,6 +148,69 @@ class SettingsViewController: UIViewController {
                 }
             }
         }
+    }
+
+    private func performDataDownload(loadingAlert: UIAlertController) {
+        // Download Firebase bus data (large file)
+        FirebaseDataManager.shared.downloadBusData(
+            progressHandler: { progress in
+                DispatchQueue.main.async {
+                    loadingAlert.message = "下載進度: \(Int(progress * 100))%"
+                }
+            },
+            completion: { [weak self] result in
+                switch result {
+                case .success(let tempURL):
+                    // Install downloaded data
+                    FirebaseDataManager.shared.installDownloadedData(from: tempURL) { installResult in
+                        DispatchQueue.main.async {
+                            loadingAlert.dismiss(animated: true) {
+                                switch installResult {
+                                case .success:
+                                    // Hide the update hint
+                                    self?.hasNewVersionAvailable = false
+                                    self?.checkDataVersion()
+                                    self?.tableView.reloadData()
+
+                                    // Show toast message instead of alert
+                                    self?.showToast(message: "巴士數據已更新至最新版本")
+
+                                case .failure:
+                                    let alert = UIAlertController(
+                                        title: "更新失敗",
+                                        message: "無法安裝巴士數據，請稍後再試",
+                                        preferredStyle: .alert
+                                    )
+                                    alert.addAction(UIAlertAction(title: "確定", style: .default))
+                                    self?.present(alert, animated: true)
+                                }
+                            }
+                        }
+                    }
+
+                case .failure:
+                    DispatchQueue.main.async {
+                        loadingAlert.dismiss(animated: true) {
+                            let alert = UIAlertController(
+                                title: "更新失敗",
+                                message: "無法下載巴士數據，請檢查網路連線並稍後再試",
+                                preferredStyle: .alert
+                            )
+                            alert.addAction(UIAlertAction(title: "確定", style: .default))
+                            self?.present(alert, animated: true)
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    @objc private func appearanceChanged(_ sender: UISegmentedControl) {
+        guard let mode = AppearanceManager.AppearanceMode(rawValue: sender.selectedSegmentIndex) else { return }
+        AppearanceManager.shared.currentMode = mode
+
+        // Show confirmation
+        showToast(message: "已切換至\(mode.displayName)模式")
     }
 
     @objc private func fontSizeChanged(_ sender: UISegmentedControl) {
@@ -114,11 +243,6 @@ class SettingsViewController: UIViewController {
         // Clear all favorites without restoring defaults
         alert.addAction(UIAlertAction(title: "🗑️ 清空所有「我的」收藏", style: .destructive) { [weak self] _ in
             self?.confirmClearAllFavoritesOnly()
-        })
-
-        // Reset reference data action
-        alert.addAction(UIAlertAction(title: "📥 重新下載參考巴士數據", style: .default) { [weak self] _ in
-            self?.confirmResetReferenceData()
         })
 
         // Cancel action
@@ -217,60 +341,65 @@ class SettingsViewController: UIViewController {
         }
     }
 
-    private func confirmResetReferenceData() {
-        let alert = UIAlertController(
-            title: "🔄 重置參考數據",
-            message: "將重新下載 hk-bus-crawling 的最新數據。\n此操作可能需要一些時間。",
-            preferredStyle: .alert
-        )
-
-        alert.addAction(UIAlertAction(title: "開始重置", style: .default) { [weak self] _ in
-            self?.executeResetReferenceData()
-        })
-
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(alert, animated: true)
-    }
-
-    private func executeResetReferenceData() {
-        // Show loading indicator
-        let loadingAlert = UIAlertController(title: "重置中", message: "正在下載最新參考數據...", preferredStyle: .alert)
-        present(loadingAlert, animated: true)
-
-        DeveloperToolsManager.shared.resetReferenceBusData { [weak self] result in
-            DispatchQueue.main.async {
-                loadingAlert.dismiss(animated: true) {
-                    switch result {
-                    case .success(let message):
-                        let alert = UIAlertController(
-                            title: "✅ 重置成功",
-                            message: message,
-                            preferredStyle: .alert
-                        )
-                        alert.addAction(UIAlertAction(title: "確定", style: .default))
-                        self?.present(alert, animated: true)
-
-                    case .failure(let error):
-                        let alert = UIAlertController(
-                            title: "❌ 重置失敗",
-                            message: "錯誤：\(error.localizedDescription)",
-                            preferredStyle: .alert
-                        )
-                        alert.addAction(UIAlertAction(title: "確定", style: .default))
-                        self?.present(alert, animated: true)
-                    }
-                }
-            }
-        }
-    }
-
     private func showToast(message: String) {
-        let toast = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-        present(toast, animated: true)
+        // Create toast container
+        let toastView = UIView()
 
-        // Auto dismiss after 1 second
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            toast.dismiss(animated: true)
+        // Determine background color based on AppearanceManager setting
+        // This ensures correct color even during appearance transitions
+        let isDarkMode: Bool
+        let currentMode = AppearanceManager.shared.currentMode
+
+        if currentMode == .automatic {
+            // In automatic mode, use system's actual appearance (not overridden traitCollection)
+            // UIScreen.main.traitCollection reflects the true system appearance
+            isDarkMode = UIScreen.main.traitCollection.userInterfaceStyle == .dark
+        } else {
+            // Use explicit appearance setting
+            isDarkMode = currentMode == .dark
+        }
+
+        // Dark mode: solid black, Light mode: solid white
+        toastView.backgroundColor = isDarkMode ? UIColor.black : UIColor.white
+        toastView.layer.cornerRadius = 12
+        toastView.translatesAutoresizingMaskIntoConstraints = false
+        toastView.alpha = 0
+
+        // Create message label
+        let messageLabel = UILabel()
+        messageLabel.text = message
+        messageLabel.textColor = UIColor.label  // Auto-adapts: white in dark mode, black in light mode
+        messageLabel.font = UIFont.systemFont(ofSize: 15, weight: .medium)
+        messageLabel.textAlignment = .center
+        messageLabel.numberOfLines = 0
+        messageLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        toastView.addSubview(messageLabel)
+        view.addSubview(toastView)
+
+        // Layout constraints
+        NSLayoutConstraint.activate([
+            messageLabel.topAnchor.constraint(equalTo: toastView.topAnchor, constant: 12),
+            messageLabel.bottomAnchor.constraint(equalTo: toastView.bottomAnchor, constant: -12),
+            messageLabel.leadingAnchor.constraint(equalTo: toastView.leadingAnchor, constant: 16),
+            messageLabel.trailingAnchor.constraint(equalTo: toastView.trailingAnchor, constant: -16),
+
+            toastView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            toastView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            toastView.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 40),
+            toastView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -40)
+        ])
+
+        // Animate in
+        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
+            toastView.alpha = 1.0
+        } completion: { _ in
+            // Auto dismiss after 1.5 seconds
+            UIView.animate(withDuration: 0.3, delay: 1.5, options: .curveEaseIn) {
+                toastView.alpha = 0
+            } completion: { _ in
+                toastView.removeFromSuperview()
+            }
         }
     }
 }
@@ -288,9 +417,10 @@ extension SettingsViewController: UITableViewDataSource {
 
         switch sectionType {
         case .dataManagement:
-            return 1 // Update route data
+            // Data version info + Update route data + (optional: update hint)
+            return hasNewVersionAvailable ? 3 : 2
         case .displaySettings:
-            return 1 // Font size
+            return 2 // Appearance + Font size
         case .about:
             return 1 // App version
         }
@@ -303,19 +433,53 @@ extension SettingsViewController: UITableViewDataSource {
 
         switch sectionType {
         case .dataManagement:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "SettingsCell", for: indexPath)
-            cell.textLabel?.text = "更新路線資料"
-            cell.textLabel?.textColor = UIColor.systemBlue
-            cell.accessoryType = .disclosureIndicator
-            cell.selectionStyle = .default
-            return cell
+            if indexPath.row == 0 {
+                // Data version info row
+                let cell = UITableViewCell(style: .value1, reuseIdentifier: nil)
+                cell.textLabel?.text = "巴士數據"
+                cell.textLabel?.textColor = UIColor.label
+                cell.detailTextLabel?.text = lastUpdateStatus
+                cell.detailTextLabel?.textColor = UIColor.secondaryLabel
+                cell.detailTextLabel?.font = UIFont.systemFont(ofSize: 15)
+                cell.accessoryType = .none
+                cell.selectionStyle = .none
+                return cell
+            } else if indexPath.row == 1 {
+                // Update route data button
+                let cell = tableView.dequeueReusableCell(withIdentifier: "SettingsCell", for: indexPath)
+                cell.textLabel?.text = "更新路線資料"
+                cell.textLabel?.textColor = UIColor.systemBlue
+                cell.accessoryType = .disclosureIndicator
+                cell.selectionStyle = .default
+                return cell
+            } else {
+                // New version hint (row 2, only shows when hasNewVersionAvailable)
+                let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+                cell.textLabel?.text = "🆕 有新版本巴士數據可供更新"
+                cell.textLabel?.textColor = UIColor.systemOrange
+                cell.textLabel?.font = UIFont.systemFont(ofSize: 15, weight: .medium)
+                cell.textLabel?.numberOfLines = 0
+                cell.accessoryType = .none
+                cell.selectionStyle = .none
+                cell.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.1)
+                return cell
+            }
 
         case .displaySettings:
             guard let cell = tableView.dequeueReusableCell(withIdentifier: "SegmentedControlCell", for: indexPath) as? SegmentedControlCell else {
                 return UITableViewCell()
             }
-            cell.configure(title: "字體大細", segments: ["普通", "加大"], selectedIndex: FontSizeManager.shared.isLargeFontEnabled ? 1 : 0)
-            cell.segmentedControl.addTarget(self, action: #selector(fontSizeChanged(_:)), for: .valueChanged)
+
+            if indexPath.row == 0 {
+                // Appearance setting
+                cell.configure(title: "外觀", segments: ["自動", "淺色", "深色"], selectedIndex: AppearanceManager.shared.currentMode.rawValue)
+                cell.segmentedControl.addTarget(self, action: #selector(appearanceChanged(_:)), for: .valueChanged)
+            } else {
+                // Font size setting
+                cell.configure(title: "字體大細", segments: ["普通", "加大"], selectedIndex: FontSizeManager.shared.isLargeFontEnabled ? 1 : 0)
+                cell.segmentedControl.addTarget(self, action: #selector(fontSizeChanged(_:)), for: .valueChanged)
+            }
+
             cell.selectionStyle = .none
             return cell
 
@@ -352,7 +516,10 @@ extension SettingsViewController: UITableViewDelegate {
 
         switch sectionType {
         case .dataManagement:
-            updateRouteData()
+            // Only row 1 is tappable (Update route data)
+            if indexPath.row == 1 {
+                updateRouteData()
+            }
         case .displaySettings:
             break // Handled by segmented control
         case .about:

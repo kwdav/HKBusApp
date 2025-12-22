@@ -38,10 +38,16 @@ Create a user-friendly iOS HK Bus App with real-time ETA display, route search, 
 - Some CTB routes (120 special/seasonal routes with R/P/N suffixes) may return 403 Forbidden
 
 ### Data Source
-- **hk-bus-crawling**: `https://data.hkbus.app/routeFareList.min.json`
-  - Used for offline stop coordinates and bilingual names
-  - 15,079 total stops across all companies
-  - Attribution required: "HK Bus Crawling@2021, https://github.com/hkbus/hk-bus-crawling" (GPL-2.0)
+- **Custom Python Script** (`collect_bus_data_optimized_concurrent.py`):
+  - Runs on NAS server with scheduled automated execution
+  - Direct API integration: v2 CTB/NWFB API + v1 KMB API
+  - Generates complete bus network data (2,090 routes, 9,223 stops)
+  - Auto-uploads to Firebase Storage with security protection
+- **Firebase Storage Distribution**:
+  - App downloads `bus_data.json` (17.76MB) via Firebase SDK
+  - Protected by Firebase Security Rules (app-only access)
+  - Automatic update mechanism with version checking
+  - No public API exposure - secure authenticated downloads only
 
 ## Current Project Structure
 
@@ -83,13 +89,22 @@ HKBusApp/
 
 ### 1. Dynamic Favorites System
 - Core Data persistence with category management
-- Add/remove/reorder routes with swipe gestures
+- Edit mode with standard iOS table view editing (delete & reorder)
 - Station-specific route ETA favorites (stop + route combination)
 - Contextual star button: hidden on "我的" page, visible on route search page
+- Empty state with visual guidance for first-time users
+- No automatic default data loading - user-driven experience
+- **Tap-to-navigate**: Tap favorite routes in "我的" page to view full route details
+- **Smart stop expansion**: Auto-expands the favorited stop (not nearest stop) when entering from favorites
 
 ### 2. Real-Time ETA Display
 - Concurrent API calls to CTB, NWFB, KMB with 30-minute caching
-- Color-coded ETA (red=arriving, orange=2min, green=normal)
+- **WCAG AAA compliant color system for ALL text elements** (7.0:1+ contrast ratio)
+  - First ETA: Deep blue `#003D82` (light mode) / systemTeal (dark mode) - 7.5:1 contrast
+  - Second/third ETA: 85% opacity white/black for subtle hierarchy - 7.3:1 contrast
+  - Destination labels ("→ 目的站點"): 85% opacity white/black - 7.3:1 contrast (AAA)
+  - Search result directions: 85% opacity white/black - 7.3:1 contrast (AAA)
+  - Smart opacity-based visual differentiation while maintaining AAA accessibility
 - 50-second auto-refresh with unified manual pull-to-refresh across all pages
 - Standardized pull-to-refresh UI with dark mode-adaptive styling
 - Contextual refresh text labels ("更新路線", "更新站點", "更新到站時間")
@@ -103,13 +118,19 @@ HKBusApp/
 - Custom keyboard with responsive layout and instant button state changes
 - Circular update prevention with dual-state synchronization
 - Float-left letter button layout (visible buttons flow without gaps)
+- **Pull-to-refresh disabled during search**: `refreshControl = nil` when showing search results
+- Refresh control automatically restored when returning to nearby routes mode
 
 ### 4. Route Detail View
 - Visual route line with color coding (green=start, red=end, blue=middle)
 - In-cell ETA display with tap-to-refresh (5s cooldown)
-- Auto-refresh every 60 seconds for expanded stops
+- **Expanded stop highlighting**: 10% blue background when showing ETA for clear visual feedback
+- Auto-refresh every 50 seconds for expanded stops
 - Smart direction switching with fade animations
-- Auto-expand nearest stop within 1000m
+- **Intelligent auto-expand**: Priority-based expansion system
+  - From favorites ("我的" page): Auto-expands the specific stop user favorited
+  - From search/station: Auto-expands nearest stop within 1000m
+  - Seamless fallback mechanism for all entry points
 
 ### 5. Station Search
 - Recent stops history with persistent storage
@@ -122,10 +143,49 @@ HKBusApp/
 - Triple-fallback: cached → low-accuracy GPS (1.5s timeout) → Central HK
 - Sub-second nearby route loading
 
-### 7. Navigation
+### 7. Navigation & Tab Memory System
 - 3-tab interface: 我的 (star icon), 路線 (bus icon), 站點 (map pin icon)
 - Tab bar with translucent blur effect
 - Smart tab switching with navigation stack management
+- **Intelligent Tab Restoration**:
+  - App remembers last used tab across app launches (stored in UserDefaults)
+  - Kill app and reopen restores your last selected tab automatically
+  - First-time users (no saved tab) see "路線" tab if no favorites, "我的" tab if favorites exist
+  - Navigation stack resets to first page when restoring tabs for clean state
+  - Tab selection persists regardless of favorites data changes
+- **Unified Navigation Experience**:
+  - Consistent CATransition animations across all entry points (0.3s, moveIn from right)
+  - Navigation bar visibility managed automatically (shown in route details, hidden in favorites list)
+  - Edit mode check prevents navigation during reordering/deletion operations
+
+### 8. Empty State Experience
+- Professional onboarding for new users with visual illustration
+- Clear guidance: "未有收藏路線" + "前往路線或站點頁面，點擊星號按鈕即可加入收藏"
+- ScrollView support for small screens with preserved pull-to-refresh
+- High-contrast text (label/secondaryLabel) for excellent readability
+- Empty state asset: 325x225px image in Assets.xcassets
+
+### 9. Floating Refresh Button
+- **Visual Design**: iOS 18 Liquid Glass effect with capsule shape (160px × 48px, corner radius 24px)
+  - systemThinMaterial blur + UIVibrancyEffect for enhanced glass appearance
+  - Semi-transparent with subtle shadow (offset: 0,4 | opacity: 0.15 | radius: 8px)
+  - Fixed position: bottom center, 16px above tab bar
+- **Interactive Animation**: Smooth morphing transition
+  - Shrinks to perfect 48px circle on tap (0.3s spring animation, damping 0.7)
+  - Loading spinner rotates for 3 seconds
+  - Expands back to capsule (0.3s spring animation)
+  - 4-second total lock period (3s loading + 1s post-animation cooldown)
+- **Smart Behavior**:
+  - Auto-hides in empty state (no favorites) and edit mode
+  - Prevents rapid re-tapping during animation cycle
+  - Integrated with pull-to-refresh mechanism (both trigger `loadData()`)
+- **Adaptive Typography**:
+  - Normal font: 16pt medium "重新整理"
+  - Large font: 18pt medium "重新整理"
+  - Responds to FontSizeManager changes in real-time
+- **Layout Optimization**:
+  - Added 80px bottom padding to table view content inset
+  - Prevents last item occlusion by floating button
 
 ## UI/UX Design Philosophy
 
@@ -139,12 +199,16 @@ HKBusApp/
 ### Visual Hierarchy
 1. **Bus Number**: 34pt semibold, primary focus
 2. **Stop Name**: 16pt semibold white (updated in v0.6.1)
-3. **Destination**: 14pt light gray (updated in v0.6.1)
-4. **ETA Times**: 17pt, right-aligned, color-coded by urgency (updated in v0.6.1)
+3. **Destination**: 15pt regular, 85% opacity white/black - 7.3:1 contrast (updated in v0.8.3)
+4. **ETA Times**: WCAG AAA compliant colors (updated in v0.8.2-v0.8.3)
+   - First ETA: 17pt, deep blue #003D82 (light mode) / systemTeal (dark mode) - 7.5:1 contrast
+   - Second/third ETA: 15pt, 85% opacity white/black - 7.3:1 contrast
+   - All ETA times and destination labels meet AAA accessibility standards
 
 ### Typography
 - Bus numbers: 34pt semibold
 - Station names: 24pt semibold (in station search, updated in v0.6.1)
+- Destination labels: 15pt regular (updated in v0.8.3, +1pt from v0.6.1)
 - Section headers: 16pt medium (updated in v0.6.1)
 - Regular text: 17pt medium (updated in v0.6.1)
 - Small text: 15pt regular (updated in v0.6.1)
@@ -206,10 +270,12 @@ App logs should show:
   - Instant button state changes (no animations)
   - Float-left letter button behavior (visible buttons flow continuously)
   - Dynamic row reorganization when button visibility changes
-- **State Synchronization**: Dual-state system with circular update prevention
+- **State Synchronization**: Robust dual-state system with race condition protection (v0.10.1)
   - `searchBar.text` (UI state) synced with `currentSearchText` (internal state)
-  - `isUpdatingFromKeyboard` flag prevents infinite update loops
-  - Search consistency validation before API calls
+  - `isUpdatingFromKeyboard` flag with synchronous reset using `defer` statement
+  - Prevents race conditions during rapid key presses
+  - Timer-based validation ensures consistency before API calls
+  - No recursive calls in `performSearch()` - direct state updates only
 
 ### Supported Route Types
 - Regular Routes: 1, 2, 3... 999
@@ -249,12 +315,19 @@ App logs should show:
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed update history.
 
-**Latest Version**: v0.6.1 (2025-10-22)
-- Enhanced font sizes across the app: all normal fonts increased by 3pt for better readability
-- Updated font scale system with new baselines: stop names 16pt, destinations 14pt, ETA times 17pt
-- Improved developer tools with "Clear All Favorites Only" option for testing empty states
-- Complete settings page with font management and hidden developer menu
-- Previous: Fixed "我的" page scroll indicator positioning and section header spacing
+**Latest Version**: v0.12.3 (2025-12-18)
+- **Toast Notification Appearance Mode Fix**:
+  - Fixed toast background color mismatch when switching to "自動" mode
+  - Toast now uses `UIScreen.main.traitCollection` for accurate system appearance detection
+  - Prevents color flickering during 0.3-second appearance transition animation
+  - All appearance mode transitions now show correct toast colors immediately
+
+**Previous Versions**:
+- **v0.12.2** (2025-12-18): Settings page update indicator, smart download logic, 30s timeout, security enhancements
+- **v0.12.1** (2025-12-13): Firebase rsync error fix for Xcode 15+ compatibility
+- **v0.12.0** (2025-12-13): Firebase Storage integration with auto-update mechanism
+- **v0.10.1** (2025-12-12): Custom keyboard & search bug fixes
+- **v0.10.0** (2025-12-12): Multi-page floating refresh buttons
 
 ## Known Issues & Limitations
 
@@ -270,13 +343,60 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed update history.
    - Built-in protection with delays and cooldowns
    - Progressive loading to distribute load
 
+## Firebase Data Distribution & Google Analytics Integration (In Progress)
+
+### Implementation Phases
+
+#### Phase 1: Python Data Collection Validation ✅
+- Enhanced validation rules (10-layer validation system)
+- Generate `bus_data_metadata.json` with version, MD5, SHA256 checksums
+- Automatic backup mechanism (keep last 7 versions)
+- Generate validation report `validation_report.json`
+
+#### Phase 2: Firebase Manual Upload Flow 🔄
+- Create Firebase project and configure Storage
+- Implement `manual_upload_firebase.py` standalone script
+- Configure Firebase Security Rules (app-only access)
+- Upload data file + metadata file
+
+#### Phase 3: iOS App Smart Download Mechanism 📱
+- New `FirebaseDataManager.swift` (version check, download, verification)
+- Modify `LocalBusDataManager.swift` (support reading from Documents)
+- Auto check for updates on app launch (24-hour throttling)
+- Manual update button in Settings page
+- **Download only when updates available to save traffic**
+
+#### Phase 4: Google Analytics Integration 📊
+- Install Firebase Analytics SDK
+- Implement `AnalyticsManager.swift` (track all core behaviors)
+- Integrate tracking events in 8 pages
+- Privacy settings (first launch consent + toggle in Settings)
+- Track: route search, view, favorite, refresh, data updates
+
+#### Phase 5: Future Automation (Post-Launch) 🤖
+- Integrate Firebase upload into Python script
+- Configure QNAP NAS Cron job (auto-run every 3 days)
+- Implement data monitoring script (warn if >7 days old)
+- Complete logging and email notifications
+
+### Key Features
+- **Smart Version Control**: Unix timestamp version + MD5/SHA256 verification
+- **Traffic Savings**: 24-hour check throttling + download only when updated
+- **Security**: Firebase Security Rules (authenticated iOS App only)
+- **Comprehensive Analytics**: Track all core user behaviors + privacy compliant
+- **Automated Operations**: Cron jobs + monitoring scripts + backup mechanism
+
+### Timeline
+- Week 1-4: Complete Phase 1-4
+- Week 5: Testing and launch preparation
+- Post-Launch: Implement Phase 5 (automation)
+
 ## Future Enhancements (Phase 3)
 
-1. Theme customization system with user-selectable themes
-2. MapKit integration for stop visualization
-3. iOS Widget support for home screen
-4. Push notifications for bus arrivals
-5. Apple Watch companion app
-6. Siri Shortcuts integration
-7. Enhanced offline mode with cached ETA data
-8. Accessibility improvements (VoiceOver support)
+1. MapKit integration for stop visualization
+2. iOS Widget support for home screen
+3. Push notifications for bus arrivals
+4. Apple Watch companion app
+5. Siri Shortcuts integration
+6. Enhanced offline mode with cached ETA data
+7. Accessibility improvements (VoiceOver support)

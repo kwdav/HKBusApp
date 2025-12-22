@@ -66,9 +66,9 @@ class FontSizeManager {
         return isLargeFontEnabled ? 18 : 16
     }
 
-    /// 目的地字體大小：普通 14pt，加大 16pt (+2pt)
+    /// 目的地字體大小：普通 15pt，加大 17pt (+2pt)
     var destinationFontSize: CGFloat {
-        return isLargeFontEnabled ? 16 : 14
+        return isLargeFontEnabled ? 17 : 15
     }
 
     /// ETA 時間字體大小：普通 17pt，加大 19pt (+2pt)

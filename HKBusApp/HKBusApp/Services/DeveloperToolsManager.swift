@@ -202,11 +202,9 @@ class DeveloperToolsManager {
 
     /// 獲取詳細的 App 和數據統計資訊
     func getDetailedInfo() -> String {
-        let appVersion = getAppVersion()
         let favoritesCount = FavoritesManager.shared.getAllFavorites().count
 
         var info = """
-        📱 App 版本: \(appVersion)
         ⭐ 收藏路線數: \(favoritesCount)
         """
 

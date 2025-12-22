@@ -7,7 +7,8 @@ class RouteDetailViewController: UIViewController {
     private let routeNumber: String
     private let company: BusRoute.Company
     private let direction: String
-    
+    private let targetStopId: String? // 目標站點 ID（從收藏頁面進入時使用）
+
     private let tableView = UITableView(frame: .zero, style: .grouped)
     private let apiService = BusAPIService.shared
     private let favoritesManager = FavoritesManager.shared
@@ -23,7 +24,16 @@ class RouteDetailViewController: UIViewController {
     private let locationManager = CLLocationManager()
     private var currentLocation: CLLocation?
     private var locationTimer: Timer?
-    
+
+    // MARK: - Floating Refresh Button
+    private let floatingRefreshButton = UIButton(type: .system)
+    private var floatingButtonContainer: UIVisualEffectView!
+    private let floatingButtonLoadingIndicator = UIActivityIndicatorView(style: .medium)
+    private var lastManualRefreshTime: Date?
+    private let refreshCooldown: TimeInterval = 5.0
+    private var floatingButtonWidthConstraint: NSLayoutConstraint?
+    private var isFloatingButtonAnimating = false
+
     // MARK: - UI Components
     private let headerButton = UIButton(type: .system)
     private let directionLabel = UILabel()
@@ -32,10 +42,11 @@ class RouteDetailViewController: UIViewController {
     private let loadingIndicator = UIActivityIndicatorView(style: .medium)
     
     // MARK: - Initialization
-    init(routeNumber: String, company: BusRoute.Company, direction: String) {
+    init(routeNumber: String, company: BusRoute.Company, direction: String, targetStopId: String? = nil) {
         self.routeNumber = routeNumber
         self.company = company
         self.direction = direction
+        self.targetStopId = targetStopId
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -49,6 +60,8 @@ class RouteDetailViewController: UIViewController {
         setupUI()
         setupTableView()
         setupLocationManager()
+        setupFloatingRefreshButton()
+        layoutFloatingRefreshButton()
         loadRouteDetail()
     }
     
@@ -66,6 +79,10 @@ class RouteDetailViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+
+        // Show navigation bar when entering this view (important for coming from "My" page)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+
         // Add subtle fade-in animation
         view.alpha = 0.0
         UIView.animate(withDuration: 0.3, delay: 0.1, options: .curveEaseInOut) {
@@ -229,8 +246,245 @@ class RouteDetailViewController: UIViewController {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.register(RouteStopTableViewCell.self, forCellReuseIdentifier: RouteStopTableViewCell.identifier)
+
+        // Add bottom padding for floating button
+        let floatingButtonPadding: CGFloat = 80
+        tableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: floatingButtonPadding, right: 0)
+        tableView.verticalScrollIndicatorInsets = tableView.contentInset
     }
-    
+
+    // MARK: - Floating Refresh Button Setup
+
+    private func setupFloatingRefreshButton() {
+        // 1. Create shadow container view
+        let shadowView = UIView()
+        shadowView.translatesAutoresizingMaskIntoConstraints = false
+        shadowView.backgroundColor = .clear
+        shadowView.layer.cornerRadius = 24
+        shadowView.layer.shadowColor = UIColor.black.cgColor
+        shadowView.layer.shadowOffset = CGSize(width: 0, height: 4)
+        shadowView.layer.shadowOpacity = 0.15
+        shadowView.layer.shadowRadius = 8
+        shadowView.layer.masksToBounds = false
+        shadowView.tag = 998
+        view.addSubview(shadowView)
+
+        // 2. Create blur effect container
+        let blurEffect = UIBlurEffect(style: .systemThinMaterial)
+        floatingButtonContainer = UIVisualEffectView(effect: blurEffect)
+        floatingButtonContainer.translatesAutoresizingMaskIntoConstraints = false
+        floatingButtonContainer.layer.cornerRadius = 24
+        floatingButtonContainer.clipsToBounds = true
+        floatingButtonContainer.tag = 999
+        shadowView.addSubview(floatingButtonContainer)
+
+        // 3. Create vibrancy effect for enhanced glass effect
+        let vibrancyEffect = UIVibrancyEffect(blurEffect: blurEffect, style: .label)
+        let vibrancyView = UIVisualEffectView(effect: vibrancyEffect)
+        vibrancyView.translatesAutoresizingMaskIntoConstraints = false
+        floatingButtonContainer.contentView.addSubview(vibrancyView)
+
+        // 4. Configure button with dynamic font
+        var config = UIButton.Configuration.plain()
+        config.title = "重新整理"
+        config.image = UIImage(systemName: "arrow.clockwise")
+        config.imagePlacement = .leading
+        config.imagePadding = 6
+        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14)
+        config.baseForegroundColor = UIColor.label
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            let fontSize: CGFloat = FontSizeManager.shared.isLargeFontEnabled ? 18 : 16
+            outgoing.font = UIFont.systemFont(ofSize: fontSize, weight: .medium)
+            return outgoing
+        }
+        floatingRefreshButton.configuration = config
+        floatingRefreshButton.translatesAutoresizingMaskIntoConstraints = false
+        floatingRefreshButton.addTarget(self, action: #selector(floatingRefreshButtonTapped), for: .touchUpInside)
+
+        // 5. Configure loading indicator
+        floatingButtonLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        floatingButtonLoadingIndicator.hidesWhenStopped = true
+        floatingButtonLoadingIndicator.color = UIColor.label
+
+        // 6. Add button and indicator to vibrancy view
+        vibrancyView.contentView.addSubview(floatingRefreshButton)
+        vibrancyView.contentView.addSubview(floatingButtonLoadingIndicator)
+
+        // 7. Setup constraints
+        NSLayoutConstraint.activate([
+            vibrancyView.topAnchor.constraint(equalTo: floatingButtonContainer.contentView.topAnchor),
+            vibrancyView.leadingAnchor.constraint(equalTo: floatingButtonContainer.contentView.leadingAnchor),
+            vibrancyView.trailingAnchor.constraint(equalTo: floatingButtonContainer.contentView.trailingAnchor),
+            vibrancyView.bottomAnchor.constraint(equalTo: floatingButtonContainer.contentView.bottomAnchor),
+
+            floatingRefreshButton.topAnchor.constraint(equalTo: vibrancyView.contentView.topAnchor),
+            floatingRefreshButton.leadingAnchor.constraint(equalTo: vibrancyView.contentView.leadingAnchor),
+            floatingRefreshButton.trailingAnchor.constraint(equalTo: vibrancyView.contentView.trailingAnchor),
+            floatingRefreshButton.bottomAnchor.constraint(equalTo: vibrancyView.contentView.bottomAnchor),
+
+            floatingButtonLoadingIndicator.centerXAnchor.constraint(equalTo: vibrancyView.contentView.centerXAnchor),
+            floatingButtonLoadingIndicator.centerYAnchor.constraint(equalTo: vibrancyView.contentView.centerYAnchor)
+        ])
+
+        // Initially visible (always show in route detail)
+        shadowView.isHidden = false
+        shadowView.alpha = 0.95
+    }
+
+    private func layoutFloatingRefreshButton() {
+        guard let shadowView = view.viewWithTag(998),
+              let container = view.viewWithTag(999) as? UIVisualEffectView else {
+            return
+        }
+
+        shadowView.translatesAutoresizingMaskIntoConstraints = false
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        // Use safeAreaLayoutGuide because this page has navigation bar
+        let widthConstraint = shadowView.widthAnchor.constraint(equalToConstant: 160)
+        floatingButtonWidthConstraint = widthConstraint
+
+        NSLayoutConstraint.activate([
+            shadowView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            shadowView.bottomAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.bottomAnchor,
+                constant: -16
+            ),
+            widthConstraint,
+            shadowView.heightAnchor.constraint(equalToConstant: 48),
+
+            container.topAnchor.constraint(equalTo: shadowView.topAnchor),
+            container.leadingAnchor.constraint(equalTo: shadowView.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: shadowView.trailingAnchor),
+            container.bottomAnchor.constraint(equalTo: shadowView.bottomAnchor)
+        ])
+    }
+
+    // MARK: - Floating Button Actions
+
+    @objc private func floatingRefreshButtonTapped() {
+        guard !isFloatingButtonAnimating else {
+            print("🔒 按鈕動畫中，無法點擊")
+            return
+        }
+
+        guard canPerformManualRefresh() else {
+            print("⏰ 刷新冷卻中，請稍後再試")
+            return
+        }
+
+        print("🔄 浮動按鈕點擊 - 觸發刷新")
+
+        isFloatingButtonAnimating = true
+
+        // Animate button to circle with loading
+        animateButtonToCircle {
+            // Trigger refresh by reloading the route detail
+            self.loadRouteDetail()
+
+            // If there's an expanded stop, refresh its ETA too
+            if let expandedIndex = self.expandedStopIndex {
+                self.refreshExpandedStopETA()
+            }
+        }
+
+        // Record refresh time
+        lastManualRefreshTime = Date()
+
+        // Reset animation flag after 4 seconds (3s loading + 1s cooldown)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            self.isFloatingButtonAnimating = false
+        }
+    }
+
+    private func animateButtonToCircle(completion: @escaping () -> Void) {
+        guard let widthConstraint = floatingButtonWidthConstraint else { return }
+
+        // 1. Shrink to circle (48px)
+        widthConstraint.constant = 48
+
+        // 2. Hide text and icon
+        var config = floatingRefreshButton.configuration
+        config?.title = ""
+        config?.image = nil
+        floatingRefreshButton.configuration = config
+
+        // 3. Show loading indicator
+        floatingButtonLoadingIndicator.startAnimating()
+
+        // 4. Animate with spring effect
+        UIView.animate(
+            withDuration: 0.3,
+            delay: 0,
+            usingSpringWithDamping: 0.7,
+            initialSpringVelocity: 0.5,
+            options: [.curveEaseInOut],
+            animations: {
+                self.view.layoutIfNeeded()
+            },
+            completion: { _ in
+                // Execute refresh
+                completion()
+
+                // Wait 3 seconds then expand back
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    self.animateButtonToNormal()
+                }
+            }
+        )
+    }
+
+    private func animateButtonToNormal() {
+        guard let widthConstraint = floatingButtonWidthConstraint else { return }
+
+        // 1. Stop loading indicator
+        floatingButtonLoadingIndicator.stopAnimating()
+
+        // 2. Expand to normal size (160px)
+        widthConstraint.constant = 160
+
+        // 3. Restore text and icon
+        var config = floatingRefreshButton.configuration
+        config?.title = "重新整理"
+        config?.image = UIImage(systemName: "arrow.clockwise")
+        floatingRefreshButton.configuration = config
+
+        // 4. Animate with spring effect
+        UIView.animate(
+            withDuration: 0.3,
+            delay: 0,
+            usingSpringWithDamping: 0.7,
+            initialSpringVelocity: 0.5,
+            options: [.curveEaseInOut],
+            animations: {
+                self.view.layoutIfNeeded()
+            }
+        )
+    }
+
+    private func canPerformManualRefresh() -> Bool {
+        guard let lastRefresh = lastManualRefreshTime else {
+            return true
+        }
+
+        let timeSinceLastRefresh = Date().timeIntervalSince(lastRefresh)
+        return timeSinceLastRefresh >= refreshCooldown
+    }
+
+    private func updateFloatingButtonFont() {
+        guard var config = floatingRefreshButton.configuration else { return }
+
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            let fontSize: CGFloat = FontSizeManager.shared.isLargeFontEnabled ? 18 : 16
+            outgoing.font = UIFont.systemFont(ofSize: fontSize, weight: .medium)
+            return outgoing
+        }
+
+        floatingRefreshButton.configuration = config
+    }
+
     // MARK: - Data Loading
     private func loadRouteDetail() {
         guard !isLoading else { return }
@@ -366,21 +620,80 @@ class RouteDetailViewController: UIViewController {
             print("📍 No route detail available for auto-expand")
             return
         }
-        
-        // If location is available, proceed immediately
+
+        // 如果有指定目標站點 ID，優先展開該站點
+        if let targetStopId = targetStopId, !hasAutoLoadedNearestStop {
+            expandTargetStop(targetStopId: targetStopId, in: detail)
+            return
+        }
+
+        // 原有邏輯：如果沒有指定站點，則使用位置尋找最近站點
         if currentLocation != nil {
             checkAndLoadNearestStopETA(for: detail)
         } else {
             // If no location yet, request it again
             print("📍 No location available, requesting location for auto-expand")
-            if CLLocationManager.locationServicesEnabled() && 
-               (locationManager.authorizationStatus == .authorizedWhenInUse || 
+            if CLLocationManager.locationServicesEnabled() &&
+               (locationManager.authorizationStatus == .authorizedWhenInUse ||
                 locationManager.authorizationStatus == .authorizedAlways) {
                 locationManager.requestLocation()
             }
         }
     }
     
+    // MARK: - Target Stop Auto-Loading
+    private func expandTargetStop(targetStopId: String, in detail: BusRouteDetail) {
+        // Only auto-load once
+        guard !hasAutoLoadedNearestStop else {
+            print("📍 Already auto-loaded a stop, skipping")
+            return
+        }
+
+        print("📍 Looking for target stop: \(targetStopId)")
+
+        // Find the stop index by stopId
+        guard let targetIndex = detail.stops.firstIndex(where: { $0.stopId == targetStopId }) else {
+            print("⚠️ Target stop \(targetStopId) not found in route, falling back to nearest stop")
+            // Fallback to nearest stop if target not found
+            if currentLocation != nil {
+                checkAndLoadNearestStopETA(for: detail)
+            }
+            return
+        }
+
+        let stop = detail.stops[targetIndex]
+        print("✅ Found target stop: \(stop.displayName) at index \(targetIndex)")
+
+        // Mark that we've auto-loaded
+        hasAutoLoadedNearestStop = true
+
+        // Auto-load ETA for the target stop
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            print("📍 Auto-loading ETA for target stop at index \(targetIndex)")
+            self.expandedStopIndex = targetIndex
+
+            // Reload data and animate height changes
+            self.tableView.beginUpdates()
+            self.tableView.reloadData()
+            self.tableView.endUpdates()
+
+            // Scroll to that stop
+            let indexPath = IndexPath(row: targetIndex, section: 0)
+            self.tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+
+            // Load ETA
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                if let cell = self.tableView.cellForRow(at: indexPath) as? RouteStopTableViewCell {
+                    print("📍 Triggering ETA load for target stop")
+                    cell.loadAndShowETA(forceRefresh: true)
+                    self.startETARefreshTimer()
+                } else {
+                    print("📍 Cell not found for ETA loading")
+                }
+            }
+        }
+    }
+
     // MARK: - Nearest Stop Auto-Loading
     private func checkAndLoadNearestStopETA(for detail: BusRouteDetail) {
         guard let currentLocation = currentLocation else {
@@ -481,15 +794,15 @@ class RouteDetailViewController: UIViewController {
             direction: direction,
             subTitle: stop.displayName
         )
-        
+
         let isFavorite = favoritesManager.isFavorite(busRoute)
-        
+
         if isFavorite {
             favoritesManager.removeFavorite(busRoute)
         } else {
-            favoritesManager.addFavorite(busRoute, subTitle: stop.displayName)
+            favoritesManager.addFavorite(busRoute, subTitle: "我的")
         }
-        
+
         // Reload the cell to update favorite state
         if let routeDetail = routeDetail,
            let stopIndex = routeDetail.stops.firstIndex(where: { $0.stopId == stop.stopId }) {
@@ -498,21 +811,15 @@ class RouteDetailViewController: UIViewController {
         }
     }
     
-    private func showMessage(_ message: String, isError: Bool) {
-        let alert = UIAlertController(title: isError ? "錯誤" : "成功", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "確定", style: .default))
-        present(alert, animated: true)
-    }
-    
     // MARK: - Direction Switching
     @objc private func directionButtonTapped() {
         // First, fetch available directions to determine if button should be interactive
         fetchAvailableDirections { [weak self] directions in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                
+
                 if directions.isEmpty {
-                    self.showMessage("無法獲取路線方向資訊", isError: true)
+                    print("⚠️ 無法獲取路線方向資訊")
                     return
                 }
                 
@@ -615,8 +922,8 @@ class RouteDetailViewController: UIViewController {
     // MARK: - ETA Auto-Refresh
     private func startETARefreshTimer() {
         stopETARefreshTimer() // Clear any existing timer
-        
-        etaRefreshTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+
+        etaRefreshTimer = Timer.scheduledTimer(withTimeInterval: 50.0, repeats: true) { [weak self] _ in
             self?.refreshExpandedStopETA()
         }
     }
