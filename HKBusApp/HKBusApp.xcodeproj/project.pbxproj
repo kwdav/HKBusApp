@@ -73,15 +73,11 @@
 		};
 		A21C5DE92E544F2A00D4ADBC /* HKBusAppTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = HKBusAppTests;
 			sourceTree = "<group>";
 		};
 		A21C5DF32E544F2A00D4ADBC /* HKBusAppUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = HKBusAppUITests;
 			sourceTree = "<group>";
 		};
@@ -119,7 +115,6 @@
 				0AA33855CB27D2A0B4A20798 /* Pods-HKBusApp.debug.xcconfig */,
 				E50EC5106C2C182474202249 /* Pods-HKBusApp.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};

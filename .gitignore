@@ -14,7 +14,7 @@ ENV/
 
 # Firebase
 *service-account*.json
-GoogleService-Info.plist
+GoogleService-Info.plist*
 hkbusapp-service-account.json
 
 # Data & Logs
