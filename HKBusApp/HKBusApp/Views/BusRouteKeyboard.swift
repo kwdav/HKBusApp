@@ -351,39 +351,57 @@ class BusRouteKeyboard: UIView {
     }
     
     // MARK: - Show/Hide Methods
-    
-    func show(animated: Bool = true) {
-        guard isHidden else { return }
-        
+
+    func show(animated: Bool = true, completion: (() -> Void)? = nil) {
+        // Remove guard clause - allow forced re-showing to fix stuck states
+
+        // Set state immediately for consistency
+        self.isHidden = false
+
         if animated {
+            // If already visible, no animation needed
+            if self.alpha == 1 && self.transform == .identity {
+                completion?()
+                return
+            }
+
             self.alpha = 0
             self.transform = CGAffineTransform(translationX: 0, y: 50)
-            self.isHidden = false
-            
-            UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut) {
+
+            UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut, animations: {
                 self.alpha = 1
                 self.transform = CGAffineTransform.identity
+            }) { _ in
+                completion?()
             }
         } else {
-            self.isHidden = false
             self.alpha = 1
             self.transform = CGAffineTransform.identity
+            completion?()
         }
     }
-    
-    func hide(animated: Bool = true) {
-        guard !isHidden else { return }
-        
+
+    func hide(animated: Bool = true, completion: (() -> Void)? = nil) {
+        // Remove guard clause - allow forced hiding
+
         if animated {
+            // If already hidden, no animation needed
+            if self.isHidden && self.alpha == 0 {
+                completion?()
+                return
+            }
+
             UIView.animate(withDuration: 0.25, delay: 0, options: .curveEaseIn, animations: {
                 self.alpha = 0
                 self.transform = CGAffineTransform(translationX: 0, y: 50)
             }) { _ in
                 self.isHidden = true
+                completion?()
             }
         } else {
             self.isHidden = true
             self.alpha = 0
+            completion?()
         }
     }
 }

@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2025-12-22
+
+### Fixed - Custom Keyboard Reliability
+- **🎹 Keyboard Re-appearance Issue**: Fixed critical bug where keyboard wouldn't reappear after dismissal
+  - Synchronized state flags with animation completions (no more race conditions)
+  - Removed blocking guard clauses that prevented re-showing
+  - Fixed searchBarShouldEndEditing to allow normal editing dismissal
+  - Added automatic state recovery in viewWillAppear
+
+- **🔄 Animation Conflict Resolution**
+  - Fixed Cancel button double-dismissal conflict
+  - Fixed scroll-to-dismiss during animation-in-progress
+  - Added completion handlers for all show/hide operations
+
+- **🛡️ State Consistency**
+  - Keyboard state now synchronized with actual visibility
+  - Added recovery mechanism for stuck states
+  - Improved edge case handling (rapid taps, mid-animation interactions)
+
+### Changed
+- Custom keyboard show/hide methods now use completion handlers
+- Search bar editing end behavior now follows standard iOS patterns
+- State flags updated after animations complete (not before)
+
+### Technical Details
+- Modified `BusRouteKeyboard.swift`:
+  - Added optional `completion` parameter to `show()` and `hide()` methods
+  - Removed guard clauses (`guard isHidden else { return }`)
+  - Set `isHidden = false` immediately in `show()` for consistency
+  - Added alpha/transform checks to avoid redundant animations
+  - Completion handlers called after UIView.animate completes
+
+- Modified `SearchViewController.swift`:
+  - Updated `showKeyboard()` and `hideKeyboard()` to use completion handlers
+  - State flags (`isKeyboardVisible`) now set in completion blocks
+  - Fixed `searchBarShouldEndEditing()` to always return `true`
+  - Updated `searchBarTextDidEndEditing()` to hide keyboard when search bar loses focus
+  - Reordered `searchBarCancelButtonClicked()` operations (keyboard hide → resign first responder)
+  - Added alpha check to `scrollViewWillBeginDragging()` (only hide if keyboard fully visible)
+  - Added `resetKeyboardStateIfNeeded()` method called in `viewWillAppear()`
+  - Added `isKeyboardAnimating` flag to prevent rapid show/hide during animations
+
+### Root Cause
+The keyboard failed to reappear due to timing race conditions:
+1. `hideKeyboard()` set `isKeyboardVisible = false` immediately
+2. Hide animation ran for 0.25s asynchronously
+3. User tapped search bar during animation
+4. `showKeyboard()` passed guard check (`isKeyboardVisible == false`)
+5. But `customKeyboard.show()` guard failed (`isHidden` still `false`)
+6. Keyboard stuck in inconsistent state
+
+**Solution**: Removed guard clauses, synchronized state with animation completions, added recovery mechanism.
+
 ## [0.13.0] - 2025-12-22
 
 ### Performance - Station Search Optimization

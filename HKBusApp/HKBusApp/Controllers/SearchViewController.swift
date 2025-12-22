@@ -23,6 +23,7 @@ class SearchViewController: UIViewController {
     private let locationManager = CLLocationManager()
     private var currentLocation: CLLocation?
     private var isKeyboardVisible = false
+    private var isKeyboardAnimating = false  // Prevents rapid calls during animations
     private var locationTimer: Timer?
     private var isUpdatingFromKeyboard = false  // Flag to prevent circular updates
     private var isCancellingSearch = false  // Flag to distinguish Cancel button from clear button
@@ -93,6 +94,9 @@ class SearchViewController: UIViewController {
 
         // Sync state between searchBar.text and currentSearchText early
         syncSearchStates()
+
+        // Reset keyboard state if inconsistent
+        resetKeyboardStateIfNeeded()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -100,7 +104,23 @@ class SearchViewController: UIViewController {
 
         // Don't auto focus search bar - user will use custom keyboard
     }
-    
+
+    /// Resets keyboard state if it's in an inconsistent state
+    private func resetKeyboardStateIfNeeded() {
+        // Check if keyboard state is inconsistent
+        let keyboardVisuallyHidden = customKeyboard.isHidden || customKeyboard.alpha == 0
+
+        if isKeyboardVisible && keyboardVisuallyHidden {
+            // State says visible, but keyboard is hidden → reset to hidden
+            print("⚠️ Keyboard state inconsistent: flag=true but visual=hidden, resetting...")
+            isKeyboardVisible = false
+        } else if !isKeyboardVisible && !keyboardVisuallyHidden {
+            // State says hidden, but keyboard is visible → force hide
+            print("⚠️ Keyboard state inconsistent: flag=false but visual=visible, force hiding...")
+            customKeyboard.hide(animated: false)
+        }
+    }
+
     private func setupUI() {
         view.backgroundColor = UIColor.systemBackground
         
@@ -251,28 +271,39 @@ class SearchViewController: UIViewController {
     }
     
     private func showKeyboard() {
-        guard !isKeyboardVisible else { return }
+        guard !isKeyboardAnimating else {
+            print("⚠️ Keyboard already animating, ignoring show request")
+            return
+        }
+
+        isKeyboardAnimating = true
 
         // Ensure keyboard is always on top before showing
         view.bringSubviewToFront(customKeyboard)
 
-        customKeyboard.show(animated: true)
-        isKeyboardVisible = true
-
-        // Adjust table view insets when keyboard is shown
-        updateTableViewInsets()
+        customKeyboard.show(animated: true) { [weak self] in
+            // State updated AFTER animation completes
+            self?.isKeyboardVisible = true
+            self?.isKeyboardAnimating = false  // Reset flag
+            self?.updateTableViewInsets()
+        }
     }
-    
+
     private func hideKeyboard() {
-        guard isKeyboardVisible else { return }
-        customKeyboard.hide(animated: true)
-        isKeyboardVisible = false
+        guard !isKeyboardAnimating else {
+            print("⚠️ Keyboard already animating, ignoring hide request")
+            return
+        }
 
-        // Sync states when hiding keyboard to ensure consistency
-        syncSearchStates()
+        isKeyboardAnimating = true
 
-        // Adjust table view insets when keyboard is hidden
-        updateTableViewInsets()
+        customKeyboard.hide(animated: true) { [weak self] in
+            // State updated AFTER animation completes
+            self?.isKeyboardVisible = false
+            self?.isKeyboardAnimating = false  // Reset flag
+            self?.syncSearchStates()
+            self?.updateTableViewInsets()
+        }
     }
     
     private func updateTableViewInsets() {
@@ -1102,22 +1133,23 @@ extension SearchViewController: UISearchBarDelegate {
         // Set flag to allow keyboard dismissal
         isCancellingSearch = true
 
-        // Clear all search-related data - ensure both states are reset
-        searchBar.text = ""
-        currentSearchText = ""
-        routeSearchResults = []
-
         // Reset keyboard button states to default
         customKeyboard.resetAllButtons()
 
-        // Hide cancel button since text is now empty
-        searchBar.setShowsCancelButton(false, animated: true)
-        searchBar.resignFirstResponder()
-
-        // Hide keyboard if visible
+        // Hide keyboard first if visible
         if isKeyboardVisible {
             hideKeyboard()
         }
+
+        // Then reset search states (resignFirstResponder handled by didEndEditing)
+        searchBar.text = ""
+        currentSearchText = ""
+
+        // Clear search results and load nearby routes
+        routeSearchResults = []
+
+        // Hide cancel button since text is now empty
+        searchBar.setShowsCancelButton(false, animated: true)
 
         // Re-add refresh control when returning to nearby routes mode
         tableView.refreshControl = refreshControl
@@ -1126,6 +1158,9 @@ extension SearchViewController: UISearchBarDelegate {
         loadNearbyRoutesImmediately()
 
         tableView.reloadData()
+
+        // Resign first responder (triggers didEndEditing)
+        searchBar.resignFirstResponder()
 
         print("🔄 重設搜尋 - searchBar和currentText都已清空")
     }
@@ -1137,13 +1172,18 @@ extension SearchViewController: UISearchBarDelegate {
     }
     
     func searchBarShouldEndEditing(_ searchBar: UISearchBar) -> Bool {
-        // Only allow keyboard dismissal when Cancel button is clicked
-        // Prevent keyboard from closing when clear button (x) is tapped
-        return isCancellingSearch
+        // Always allow search bar to end editing
+        // Keyboard visibility managed separately in didEndEditing
+        return true
     }
 
     func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
-        // Reset flag after keyboard dismissal is complete
+        // Hide keyboard when search bar loses focus
+        if isKeyboardVisible {
+            hideKeyboard()
+        }
+
+        // Reset cancelling flag if it was set
         isCancellingSearch = false
     }
 }
@@ -1323,8 +1363,9 @@ extension SearchViewController: UITableViewDelegate {
     
     // MARK: - Scroll Detection for Keyboard Handling
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        // Hide keyboard and unfocus search field when user starts scrolling
-        if isKeyboardVisible {
+        // Dismiss keyboard when user starts scrolling
+        // Only if keyboard is fully visible (alpha == 1) to avoid mid-animation conflicts
+        if isKeyboardVisible && customKeyboard.alpha == 1 {
             hideKeyboard()
             searchBar.resignFirstResponder()
         }
