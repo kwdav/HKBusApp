@@ -258,6 +258,45 @@ App logs should show:
 
 **Without this file, nearby routes will not load and the app will appear empty.**
 
+### Firebase Configuration & Security
+
+**IMPORTANT: GoogleService-Info.plist is NOT in version control**
+
+The `GoogleService-Info.plist` file contains sensitive Firebase API credentials and is intentionally excluded from Git tracking.
+
+**Setup for New Developers:**
+1. Contact project maintainer to obtain `GoogleService-Info.plist`
+2. Place file in `HKBusApp/HKBusApp/` directory
+3. **DO NOT** add to Git (already in .gitignore)
+4. Verify file is ignored: `git check-ignore -v HKBusApp/HKBusApp/GoogleService-Info.plist`
+
+**Security Protection:**
+- `.gitignore` contains `GoogleService-Info.plist*` (wildcard protects all variants)
+- File purged from Git history (commit: 78cb036)
+- API key restricted to iOS Bundle ID: `com.answertick.HKBusApp`
+- API key restricted to Firebase services: Storage, Installations
+
+**Firebase Services Used:**
+- **Firebase Storage**: Bus data distribution (`bus_data.json`)
+- **Firebase Auth**: Anonymous authentication for Security Rules
+- **Firebase Analytics**: Disabled (IS_ANALYTICS_ENABLED = false)
+
+**Security Documentation:**
+- Complete incident response guide: `FIREBASE_API_KEY_REGENERATION.md`
+- Security verification report: `APP_SECURITY_CHECK_REPORT.md`
+
+**Verification:**
+App logs should show on launch:
+```
+✅ Firebase initialized
+```
+
+**CocoaPods Dependencies:**
+- Firebase/Core
+- Firebase/Storage
+- Firebase/Auth
+- Total: 17 pods installed
+
 ## Search Functionality
 
 ### Route Search Features
@@ -315,19 +354,22 @@ App logs should show:
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed update history.
 
-**Latest Version**: v0.12.3 (2025-12-18)
-- **Toast Notification Appearance Mode Fix**:
-  - Fixed toast background color mismatch when switching to "自動" mode
-  - Toast now uses `UIScreen.main.traitCollection` for accurate system appearance detection
-  - Prevents color flickering during 0.3-second appearance transition animation
-  - All appearance mode transitions now show correct toast colors immediately
+**Latest Version**: v0.14.1 (2025-12-22)
+- **Firebase API Key Security Update**:
+  - Successfully resolved Firebase API key exposure incident
+  - Regenerated Firebase API key and updated GoogleService-Info.plist
+  - Enhanced .gitignore with wildcard pattern protection (`GoogleService-Info.plist*`)
+  - Purged sensitive files from Git history (commit: 78cb036)
+  - Comprehensive security verification completed
+  - Complete incident response documentation added
 
 **Previous Versions**:
-- **v0.12.2** (2025-12-18): Settings page update indicator, smart download logic, 30s timeout, security enhancements
+- **v0.14.0** (2025-12-22): Custom keyboard reliability fixes (re-appearance bug, animation conflicts)
+- **v0.13.0** (2025-12-22): Station search optimization (10x scrolling performance, caching, loading states)
+- **v0.12.3** (2025-12-18): Toast notification appearance mode fix
+- **v0.12.2** (2025-12-18): Settings page update indicator, smart download logic
 - **v0.12.1** (2025-12-13): Firebase rsync error fix for Xcode 15+ compatibility
 - **v0.12.0** (2025-12-13): Firebase Storage integration with auto-update mechanism
-- **v0.10.1** (2025-12-12): Custom keyboard & search bug fixes
-- **v0.10.0** (2025-12-12): Multi-page floating refresh buttons
 
 ## Known Issues & Limitations
 

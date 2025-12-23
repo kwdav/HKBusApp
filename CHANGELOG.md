@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2025-12-22
+
+### Security - Firebase API Key Regeneration
+- **🔒 API Key Security Incident Response**
+  - Successfully resolved Firebase API key exposure incident (detected via Google Cloud alert)
+  - Removed GoogleService-Info.plist from Git tracking and history
+  - Regenerated Firebase API key (old: AIzaSyD7AD..., new: AIzaSyADM3...)
+  - Enhanced .gitignore protection with wildcard pattern (`GoogleService-Info.plist*`)
+  - All sensitive files now permanently excluded from version control
+
+- **✅ Comprehensive Security Verification**
+  - Verified new API key configuration in GoogleService-Info.plist
+  - Confirmed Bundle ID consistency (com.answertick.HKBusApp)
+  - Validated Firebase initialization in AppDelegate
+  - Tested successful builds (Debug & Release modes)
+  - Verified Firebase Storage configuration
+  - Confirmed no sensitive files tracked by Git
+
+### Added - Security Documentation
+- **📋 Complete Security Response Documentation**
+  - `FIREBASE_API_KEY_REGENERATION.md`: Detailed incident response guide
+  - `SECURITY_IMMEDIATE_ACTIONS.md`: Quick action checklist
+  - `FIREBASE_API_KEY_UPDATE_REPORT.md`: Incident timeline and actions
+  - `APP_SECURITY_CHECK_REPORT.md`: Comprehensive post-incident verification
+
+### Fixed
+- **🛡️ Git Security Protection**
+  - Purged GoogleService-Info.plist from all Git history using git filter-branch
+  - Force-pushed cleaned history to GitHub (commit: 78cb036)
+  - Updated .gitignore from `GoogleService-Info.plist` to `GoogleService-Info.plist*`
+  - Created backup of old configuration (GoogleService-Info.plist.backup-20251222)
+
+### Technical Details
+- **Incident Timeline**:
+  - 11:49 - Google Cloud alert received (API key exposed on GitHub)
+  - 12:20 - Git history cleanup completed
+  - 12:25 - Force push to GitHub
+  - 16:39 - New GoogleService-Info.plist downloaded from Firebase Console
+  - 17:04 - New API key installed and verified
+  - 17:15 - Complete security verification finished
+  - Total response time: ~5.5 hours from detection to resolution
+
+- **Security Measures Applied**:
+  - ✅ Old API key disabled in Google Cloud Console
+  - ✅ New API key restricted to iOS Bundle ID (com.answertick.HKBusApp)
+  - ✅ API key restricted to required Firebase services only
+  - ✅ .gitignore enhanced with wildcard protection
+  - ✅ CocoaPods dependencies reinstalled (17 pods)
+  - ✅ Build verification (Debug & Release successful)
+
+### Recommendations Completed
+- Set up API key restrictions in Google Cloud Console
+- Configure billing alerts for abuse monitoring
+- Consider enabling Firebase App Check for additional security
+
+### Related Commits
+- `78cb036`: security: Remove GoogleService-Info.plist from tracking
+- `36615e7`: security: Update Firebase API key and enhance protection
+- `31290ec`: docs: Add comprehensive app security check report
+
 ## [0.14.0] - 2025-12-22
 
 ### Fixed - Custom Keyboard Reliability
