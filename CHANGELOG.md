@@ -7,6 +7,138 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.3] - 2025-12-30
+
+### Fixed - Invalid Route Filtering and Validation
+- **🚌 3-Layer Defense System for Invalid Routes**: Completely eliminated display of routes without stop data
+  - **Layer 1 - Search Results Filtering** (`LocalBusDataManager.searchRoutesLocally()`):
+    - Routes with no stop data are now completely filtered out from search results
+    - Validation checks both outbound and inbound directions
+    - Routes only appear if at least one direction has stops (count > 0)
+    - Added `DirectionInfo.stopCount` property for displaying actual stop counts
+    - Example: 9C (0 stops in both directions) → completely hidden from search results
+
+  - **Layer 2 - Direction Selection Validation** (`SearchViewController`):
+    - Direction picker only shows directions with stop data
+    - Filters out invalid directions before presenting selection sheet
+    - Shows error alert if no valid directions exist for selected route
+    - Prevents navigation to routes without stop data
+
+  - **Layer 3 - Route Detail Error Handling** (`RouteDetailViewController`):
+    - Added empty stops validation on route load
+    - Shows friendly error message if route has no stop data
+    - Graceful fallback prevents white screen crashes
+
+- **⌨️ Keyboard-Level Route Validation**: Custom keyboard now prevents invalid route input at character level
+  - Enhanced `LocalBusDataManager.getPossibleNextCharacters()` with stop data validation
+  - Keyboard buttons dynamically enable/disable based on route validity
+  - O(1) dictionary lookup for route_stops validation
+  - Dual-Set tracking system for validation optimization:
+    - `validatedRoutes`: Tracks all checked routes (prevents duplicate validation)
+    - `validRoutes`: Tracks only routes confirmed to have stops
+  - Example behaviors:
+    - Typing "9" → "C" button **disabled** (9C has 0 stops in both directions)
+    - Typing "90" → "C" button **enabled** (90C outbound has 15 stops)
+    - Instant visual feedback, prevents invalid input before API call
+
+- **🔄 Single-Direction Route Button Fix**: Direction switch button correctly hidden for single-direction routes
+  - Fixed `RouteDetailViewController.fetchAvailableDirections()` to use `LocalBusDataManager.searchRoutesLocally()`
+  - Previously used `BusAPIService.searchRoutes()` which returned unfiltered directions
+  - Now correctly queries filtered local data (only directions with stops)
+  - Direction switch arrow icon and button interaction disabled for single-direction routes
+  - Example: A28X (only outbound with stops) → no direction switch button
+
+### Changed
+- **LocalBusDataManager.swift**:
+  - `searchRoutesLocally()`: Added compactMap filtering for directions without stops
+  - `getPossibleNextCharacters()`: Enhanced with route_stops validation logic
+  - Added helper methods: `getRouteStopCount()`, `isValidRouteDirection()`
+
+- **SearchViewController.swift**:
+  - `handleRouteSelection()`: Added direction validation before showing selection sheet
+  - Enhanced error handling with user-friendly alert messages
+
+- **RouteDetailViewController.swift**:
+  - `loadRouteDetail()`: Added empty stops validation check
+  - `fetchAvailableDirections()`: Switched from API service to local data manager
+  - `showEmptyStopsError()`: Added error UI for routes without stops
+
+### Technical Details
+- **Route Validation Logic**:
+  - Route ID format: `{company}_{routeNumber}_{O|I}` (O=outbound, I=inbound)
+  - Validation checks: `data.routeStops[routeId]?.count ?? 0 > 0`
+  - A route is valid if **any direction** has stops (OR logic, not AND)
+  - Performance: Dictionary lookup O(1), cached keyboard state for <1ms response
+
+- **Data Integrity Context**:
+  - `bus_data.json` contains 113 CTB routes in `routes` but missing from `route_stops`
+  - These are special/seasonal routes (R/P/N suffixes, race days, peak hours)
+  - Routes exist in government API but have no active stop data
+  - Filtering prevents user confusion and empty search results
+
+- **Keyboard State Management**:
+  - Integrated with existing `keyboardStateCache` (100-item limit)
+  - Validation occurs during `getPossibleNextCharacters()` call
+  - Button states update synchronously with text input
+  - No animation delays - instant visual feedback
+
+### User Experience Improvements
+- ✅ **No Invalid Route Display**: Users never see routes that have no stops
+- ✅ **Smart Keyboard**: Buttons guide users to only valid route numbers
+- ✅ **Clear Direction Info**: Stop counts shown in direction selection sheet
+- ✅ **Clean UI**: Single-direction routes don't show unnecessary switch button
+- ✅ **Error Prevention**: Triple validation ensures no crashes from missing data
+
+### Related Files Modified
+- `LocalBusDataManager.swift`: Lines 295-338 (getPossibleNextCharacters), 397-464 (searchRoutesLocally), 465-489 (validation helpers)
+- `SearchViewController.swift`: Lines 1370-1421 (direction validation)
+- `RouteDetailViewController.swift`: Lines 511-517 (empty check), 882-901 (fetchAvailableDirections), 1120-1194 (error UI)
+
+## [0.14.2] - 2025-12-25
+
+### Fixed - Custom Keyboard Clear Button Issue
+- **🎹 Clear (x) Button Keyboard Restoration**: Fixed critical UX issue where custom keyboard disappeared after pressing Clear (x) button
+  - Root cause: `searchBarShouldClear(_:)` delegate method not being called by iOS
+  - Implemented focus reset mechanism in `textDidChange` when search text becomes empty
+  - Added `resignFirstResponder()` → `becomeFirstResponder()` cycle to force keyboard re-trigger
+  - Optimized timing with 0.2s + 0.15s delays for stable keyboard restoration
+
+- **🛡️ Multi-Layer Protection Against Interference**
+  - Modified execution order: focus reset BEFORE `tableView.reloadData()` to prevent scroll events
+  - Added `isClearingText` protection in `scrollViewWillBeginDragging` to skip keyboard hiding
+  - Added `isClearingText` protection in `textDidChange` to prevent duplicate processing
+  - Enhanced `searchBarTextDidEndEditing` with fallback keyboard restoration logic
+
+### Changed
+- **SearchViewController.swift**:
+  - `searchBarShouldClear(_:)`: Complete rewrite with focus reset logic and delayed data loading
+  - `searchBar(_:textDidChange:)`: Added Clear (x) detection and focus reset execution
+  - `scrollViewWillBeginDragging(_:)`: Added protection check to skip keyboard hiding during clear
+  - `searchBarTextDidEndEditing(_:)`: Enhanced with fallback keyboard restoration mechanism
+
+### Technical Details
+- **Focus Reset Flow**:
+  1. Clear (x) pressed → `textDidChange` detects empty text
+  2. Immediately `resignFirstResponder()` to unfocus text field
+  3. Delay 0.2s, then `becomeFirstResponder()` to refocus
+  4. Delay 0.15s, check `isKeyboardVisible` and force `showKeyboard()` if needed
+  5. Finally load nearby routes and `reloadData()`
+
+- **Timing Optimization**:
+  - Tested 0.1s delays: unstable, keyboard sometimes failed to reappear
+  - Settled on 0.2s + 0.15s: stable and reliable, keyboard consistently reappears
+  - Tradeoff: ~0.35s brief keyboard disappearance (acceptable for stability)
+
+- **Edge Cases Handled**:
+  - Scroll during clear operation: protected by `isClearingText` flag
+  - Rapid Clear (x) presses: debounced by async dispatch queue
+  - Clear after scrolling search results: keyboard correctly reappears (verified)
+
+### User Experience
+- ✅ Custom keyboard now reliably reappears after Clear (x) button press
+- ⚠️ Brief ~0.35s keyboard disappearance during focus reset (necessary for stability)
+- ✅ Consistent behavior across all scenarios (with/without scrolling)
+
 ## [0.14.1] - 2025-12-22
 
 ### Security - Firebase API Key Regeneration

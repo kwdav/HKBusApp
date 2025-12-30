@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import UIKit
 
 /**
  * LocalBusDataManager - 管理本地 JSON 巴士數據
@@ -9,13 +10,23 @@ import CoreLocation
  */
 class LocalBusDataManager {
     static let shared = LocalBusDataManager()
-    
+
     private let dataFileName = "bus_data.json"
     private var busData: LocalBusData?
     private var isLoaded = false
     private var cachedSortedRoutes: [LocalRouteInfo]? // Cache sorted routes to avoid re-sorting
-    
-    private init() {}
+    private var routeSearchIndex: [String: [LocalRouteInfo]]? // 路線號 → 路線列表
+    private var keyboardStateCache: [String: Set<Character>] = [:] // 前綴 → 可用字符
+    private let indexQueue = DispatchQueue(label: "com.hkbusapp.routeindex", qos: .userInitiated)
+
+    private init() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMemoryWarning),
+            name: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil
+        )
+    }
     
     // MARK: - Data Loading
 
@@ -66,8 +77,18 @@ class LocalBusDataManager {
         isLoaded = false
         busData = nil
         cachedSortedRoutes = nil
+        routeSearchIndex = nil // 清空索引
+        keyboardStateCache.removeAll() // 清空快取
+
         print("🔄 LocalBusDataManager: Reloading data...")
-        return loadBusData()
+        let success = loadBusData()
+
+        // 重建索引
+        if success {
+            buildRouteSearchIndex { }
+        }
+
+        return success
     }
 
     // MARK: - Private Helpers
@@ -186,19 +207,15 @@ class LocalBusDataManager {
         guard let stopRoutes = data.stopRoutes[stopId] else { return [] }
 
         return stopRoutes.map { routeInfo in
-            // Get the full route info to determine origin/destination
-            let routeId = routeInfo.routeId
-            let routeDetail = data.routes[routeId]
+            // Get route details to determine correct destination
+            let routeDetail = data.routes[routeInfo.routeId]
 
-            // Format destination with direction prefix
-            let formattedDestination: String
-            if routeInfo.direction == "inbound" {
-                // For return direction, show origin with arrow prefix
-                formattedDestination = "→ \(routeDetail?.originTC ?? routeInfo.destination)"
-            } else {
-                // For outbound direction, show destination with arrow prefix
-                formattedDestination = "→ \(routeInfo.destination)"
-            }
+            // CTB/NWFB: inbound 需要對調（使用 origin 作為 destination）
+            // KMB: destination 已經正確
+            let shouldSwap = (routeInfo.company == "CTB" || routeInfo.company == "NWFB") && routeInfo.direction == "inbound"
+            let correctDestination = shouldSwap ? (routeDetail?.originTC ?? routeInfo.destination) : routeInfo.destination
+
+            let formattedDestination = "→ \(correctDestination)"
 
             return StopRoute(
                 routeNumber: routeInfo.routeNumber,
@@ -277,21 +294,189 @@ class LocalBusDataManager {
     
     func getPossibleNextCharacters(for currentInput: String) -> Set<Character> {
         guard loadBusData(), let data = busData else { return [] }
-        
+
         let input = currentInput.uppercased()
         var possibleChars: Set<Character> = []
-        
+        var validatedRoutes: Set<String> = []  // 已檢查過的路線
+        var validRoutes: Set<String> = []  // 有站點的有效路線
+
         for routeInfo in data.routes.values {
             let routeNumber = routeInfo.routeNumber.uppercased()
-            
+
             if routeNumber.hasPrefix(input) && routeNumber.count > input.count {
                 let nextCharIndex = routeNumber.index(routeNumber.startIndex, offsetBy: input.count)
                 let nextChar = routeNumber[nextCharIndex]
-                possibleChars.insert(nextChar)
+
+                // 🔍 驗證：檢查該路線是否有任何方向包含站點資料
+                // 避免重複驗證相同路線號（不同公司可能有相同路線號）
+                let routeKey = "\(routeInfo.company)_\(routeNumber)"
+
+                if !validatedRoutes.contains(routeKey) {
+                    validatedRoutes.insert(routeKey)
+
+                    // 檢查兩個方向：outbound (O) 和 inbound (I)
+                    let outboundId = "\(routeInfo.company)_\(routeNumber)_O"
+                    let inboundId = "\(routeInfo.company)_\(routeNumber)_I"
+
+                    let hasOutbound = (data.routeStops[outboundId]?.count ?? 0) > 0
+                    let hasInbound = (data.routeStops[inboundId]?.count ?? 0) > 0
+
+                    // 只要有任一方向有站點，該路線即為有效
+                    if hasOutbound || hasInbound {
+                        validRoutes.insert(routeKey)
+                        possibleChars.insert(nextChar)
+                    }
+                } else if validRoutes.contains(routeKey) {
+                    // 已驗證過且確認為有效路線
+                    possibleChars.insert(nextChar)
+                }
+                // else: 已驗證過但無站點，不加入 possibleChars
             }
         }
-        
+
         return possibleChars
+    }
+
+    /// 獲取可能的下一個字符（快取版）
+    func getPossibleNextCharactersCached(for currentInput: String) -> Set<Character> {
+        let input = currentInput.uppercased()
+
+        // 檢查快取
+        if let cached = keyboardStateCache[input] {
+            return cached
+        }
+
+        // 計算新值（呼叫現有方法）
+        let possibleChars = getPossibleNextCharacters(for: currentInput)
+
+        // 儲存快取
+        keyboardStateCache[input] = possibleChars
+
+        // 限制快取大小（最多 100 個項目）
+        if keyboardStateCache.count > 100 {
+            keyboardStateCache.removeAll()
+        }
+
+        return possibleChars
+    }
+
+    // MARK: - Route Search
+
+    /// App 啟動時建立路線搜尋索引（異步）
+    func buildRouteSearchIndex(completion: @escaping () -> Void) {
+        indexQueue.async { [weak self] in
+            guard let self = self, self.loadBusData(), let data = self.busData else {
+                DispatchQueue.main.async { completion() }
+                return
+            }
+
+            let startTime = CFAbsoluteTimeGetCurrent()
+            var index: [String: [LocalRouteInfo]] = [:]
+
+            // 按路線號分組（遍歷 routes 字典的 values）
+            for routeInfo in data.routes.values {
+                let routeNumber = routeInfo.routeNumber.uppercased()
+                if index[routeNumber] == nil {
+                    index[routeNumber] = []
+                }
+                index[routeNumber]?.append(routeInfo)
+            }
+
+            self.routeSearchIndex = index
+
+            let endTime = CFAbsoluteTimeGetCurrent()
+            let timeElapsed = String(format: "%.3f", endTime - startTime)
+            print("⚡ 路線搜尋索引建立完成 - 耗時: \(timeElapsed)秒，索引 \(index.count) 個路線號")
+
+            DispatchQueue.main.async { completion() }
+        }
+    }
+
+    /// 本地化路線搜尋（替代 API 呼叫）
+    func searchRoutesLocally(query: String) -> [RouteSearchResult] {
+        guard !query.isEmpty, let index = routeSearchIndex else { return [] }
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let searchQuery = query.uppercased()
+        var results: [String: [LocalRouteInfo]] = [:] // routeNumber → routes
+
+        // 使用索引找出匹配的路線
+        for (routeNumber, routes) in index where routeNumber.hasPrefix(searchQuery) {
+            results[routeNumber] = routes
+        }
+
+        // 轉換為 RouteSearchResult 格式（按公司分組）
+        var searchResults: [RouteSearchResult] = []
+
+        for (routeNumber, routes) in results {
+            print("🔍 路線 \(routeNumber): 找到 \(routes.count) 個條目")
+
+            // 按公司分組
+            let groupedByCompany = Dictionary(grouping: routes) { $0.company }
+
+            for (company, companyRoutes) in groupedByCompany {
+                print("   📍 公司 \(company): \(companyRoutes.count) 個方向")
+
+                // 收集該公司的所有方向
+                // CTB/NWFB: API 返回相同的起終點，inbound 需要對調
+                // KMB: API 已返回正確的起終點，不需要對調
+                let directions = companyRoutes.compactMap { route -> DirectionInfo? in
+                    // 🔍 檢查該方向是否有站點資料
+                    let routeId = "\(route.company)_\(route.routeNumber)_\(route.direction == "outbound" ? "O" : "I")"
+                    guard let stopCount = getRouteStopCount(routeId: routeId), stopCount > 0 else {
+                        print("      ⚠️ 跳過無站點方向: \(route.direction)")
+                        return nil  // 過濾掉無站點的方向
+                    }
+
+                    let shouldSwap = (route.company == "CTB" || route.company == "NWFB") && route.direction == "inbound"
+
+                    let origin = shouldSwap ? route.destTC : route.originTC
+                    let destination = shouldSwap ? route.originTC : route.destTC
+
+                    print("      ✅ \(route.direction): \(origin) → \(destination) (\(stopCount)個站)")
+                    return DirectionInfo(
+                        direction: route.direction,
+                        origin: origin,
+                        destination: destination,
+                        stopCount: stopCount  // ✅ 設定實際站點數
+                    )
+                }
+
+                // 🚫 如果所有方向都無站點，不加入搜尋結果
+                guard !directions.isEmpty else {
+                    print("   ⚠️ 路線 \(routeNumber) (\(company)) 所有方向均無站點，跳過")
+                    continue  // 跳過這個公司的結果
+                }
+
+                let result = RouteSearchResult(
+                    routeNumber: routeNumber,
+                    company: BusRoute.Company(rawValue: company) ?? .CTB,
+                    directions: directions
+                )
+                searchResults.append(result)
+            }
+        }
+
+        // 排序：路線號優先，公司次之
+        searchResults.sort { r1, r2 in
+            if r1.routeNumber != r2.routeNumber {
+                return r1.routeNumber.localizedStandardCompare(r2.routeNumber) == .orderedAscending
+            }
+            return r1.company.rawValue < r2.company.rawValue
+        }
+
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let timeElapsed = String(format: "%.1f", (endTime - startTime) * 1000)
+        print("⚡ 本地搜尋完成 - 查詢: '\(query)', 結果: \(searchResults.count), 耗時: \(timeElapsed)ms")
+
+        return searchResults
+    }
+
+    // MARK: - Memory Management
+
+    @objc private func handleMemoryWarning() {
+        print("⚠️ 記憶體警告 - 清空鍵盤快取")
+        keyboardStateCache.removeAll()
     }
     
     // MARK: - Stop Coordinates
@@ -309,6 +494,37 @@ class LocalBusDataManager {
     func getStopInfo(stopId: String) -> LocalStopInfo? {
         guard loadBusData(), let data = busData else { return nil }
         return data.stops[stopId]
+    }
+
+    // MARK: - Route Validation
+
+    /// 檢查指定路線是否有站點資料
+    /// - Parameter routeId: 路線 ID（格式：CTB_90C_O）
+    /// - Returns: 站點數量，nil 表示路線不存在
+    func getRouteStopCount(routeId: String) -> Int? {
+        guard loadBusData(), let data = busData else { return nil }
+
+        guard let stops = data.routeStops[routeId] else {
+            return nil  // 路線不存在或無站點資料
+        }
+
+        return stops.count
+    }
+
+    /// 檢查路線方向是否有效（有站點資料）
+    /// - Parameters:
+    ///   - routeNumber: 路線號碼（如 "90C"）
+    ///   - company: 巴士公司
+    ///   - direction: 方向（"outbound" 或 "inbound"）
+    /// - Returns: true 表示有站點，false 表示無站點
+    func isValidRouteDirection(routeNumber: String, company: String, direction: String) -> Bool {
+        let routeId = "\(company)_\(routeNumber)_\(direction == "outbound" ? "O" : "I")"
+
+        if let count = getRouteStopCount(routeId: routeId) {
+            return count > 0
+        }
+
+        return false
     }
 }
 

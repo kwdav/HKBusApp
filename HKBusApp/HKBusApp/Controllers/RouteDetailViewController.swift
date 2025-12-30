@@ -509,6 +509,13 @@ class RouteDetailViewController: UIViewController {
                 
                 switch result {
                 case .success(let detail):
+                    // 🔍 驗證站點數量
+                    if detail.stops.isEmpty {
+                        print("⚠️ 路線 \(self?.routeNumber ?? "") 無站點資料")
+                        self?.showEmptyStopsError()
+                        return
+                    }
+
                     self?.routeDetail = detail
                     self?.updateUI(with: detail)
                     self?.tableView.reloadData()
@@ -873,19 +880,22 @@ class RouteDetailViewController: UIViewController {
     }
     
     private func fetchAvailableDirections(completion: @escaping ([DirectionInfo]) -> Void) {
-        apiService.searchRoutes(routeNumber: routeNumber) { result in
-            switch result {
-            case .success(let searchResults):
-                // Find matching route
-                if let matchingRoute = searchResults.first(where: { 
-                    $0.routeNumber == self.routeNumber && $0.company == self.company 
-                }) {
+        // 🔍 Use LocalBusDataManager to get filtered directions (only directions with stops)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let searchResults = LocalBusDataManager.shared.searchRoutesLocally(query: self.routeNumber)
+
+            // Find matching route
+            if let matchingRoute = searchResults.first(where: {
+                $0.routeNumber == self.routeNumber && $0.company == self.company
+            }) {
+                // ✅ This will only return directions with stop data (count > 0)
+                DispatchQueue.main.async {
                     completion(matchingRoute.directions)
-                } else {
+                }
+            } else {
+                DispatchQueue.main.async {
                     completion([])
                 }
-            case .failure(_):
-                completion([])
             }
         }
     }
@@ -1108,5 +1118,80 @@ extension RouteDetailViewController: CLLocationManagerDelegate {
         @unknown default:
             break
         }
+    }
+
+    // MARK: - Error Handling
+
+    private func showEmptyStopsError() {
+        // 清理現有視圖
+        tableView.isHidden = true
+
+        // 建立錯誤視圖
+        let errorView = UIView()
+        errorView.backgroundColor = .systemBackground
+        errorView.tag = 9999  // 用於後續移除
+
+        let stackView = UIStackView()
+        stackView.axis = .vertical
+        stackView.spacing = 20
+        stackView.alignment = .center
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+
+        // 圖示
+        let iconView = UIImageView(image: UIImage(systemName: "exclamationmark.triangle.fill"))
+        iconView.tintColor = .systemOrange
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+
+        // 標題
+        let titleLabel = UILabel()
+        titleLabel.text = "此路線暫無站點資料"
+        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
+        titleLabel.textColor = .label
+        titleLabel.textAlignment = .center
+
+        // 說明
+        let messageLabel = UILabel()
+        messageLabel.text = "路線 \(routeNumber) (\(company.rawValue)) 可能是特殊路線、季節性路線或維護中。\n\n請嘗試搜尋其他路線。"
+        messageLabel.font = .systemFont(ofSize: 16)
+        messageLabel.textColor = .secondaryLabel
+        messageLabel.textAlignment = .center
+        messageLabel.numberOfLines = 0
+
+        // 返回按鈕
+        let backButton = UIButton(type: .system)
+        backButton.setTitle("返回搜尋", for: .normal)
+        backButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .medium)
+        backButton.backgroundColor = .systemBlue
+        backButton.setTitleColor(.white, for: .normal)
+        backButton.layer.cornerRadius = 12
+        backButton.contentEdgeInsets = UIEdgeInsets(top: 12, left: 32, bottom: 12, right: 32)
+        backButton.addTarget(self, action: #selector(goBackToSearch), for: .touchUpInside)
+
+        stackView.addArrangedSubview(iconView)
+        stackView.addArrangedSubview(titleLabel)
+        stackView.addArrangedSubview(messageLabel)
+        stackView.addArrangedSubview(backButton)
+
+        errorView.addSubview(stackView)
+        view.addSubview(errorView)
+
+        // Layout
+        errorView.frame = view.bounds
+        errorView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
+        NSLayoutConstraint.activate([
+            iconView.widthAnchor.constraint(equalToConstant: 80),
+            iconView.heightAnchor.constraint(equalToConstant: 80),
+
+            stackView.centerXAnchor.constraint(equalTo: errorView.centerXAnchor),
+            stackView.centerYAnchor.constraint(equalTo: errorView.centerYAnchor),
+            stackView.leadingAnchor.constraint(greaterThanOrEqualTo: errorView.leadingAnchor, constant: 32),
+            stackView.trailingAnchor.constraint(lessThanOrEqualTo: errorView.trailingAnchor, constant: -32)
+        ])
+    }
+
+    @objc private func goBackToSearch() {
+        navigationController?.popViewController(animated: true)
     }
 }

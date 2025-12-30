@@ -354,16 +354,18 @@ App logs should show on launch:
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed update history.
 
-**Latest Version**: v0.14.1 (2025-12-22)
-- **Firebase API Key Security Update**:
-  - Successfully resolved Firebase API key exposure incident
-  - Regenerated Firebase API key and updated GoogleService-Info.plist
-  - Enhanced .gitignore with wildcard pattern protection (`GoogleService-Info.plist*`)
-  - Purged sensitive files from Git history (commit: 78cb036)
-  - Comprehensive security verification completed
-  - Complete incident response documentation added
+**Latest Version**: v0.14.3 (2025-12-30)
+- **Invalid Route Filtering & Validation System**:
+  - 3-layer defense system: search filtering → direction validation → error handling
+  - Keyboard-level validation prevents typing invalid route numbers
+  - Example: Typing "9" disables "C" button (9C has no stops), typing "90" enables "C" (90C has stops)
+  - Single-direction routes (e.g., A28X) correctly hide direction switch button
+  - LocalBusDataManager.swift: Enhanced getPossibleNextCharacters() with stop data validation
+  - SearchViewController.swift: Direction validation before selection sheet
+  - RouteDetailViewController.swift: Fixed fetchAvailableDirections() to use filtered local data
 
 **Previous Versions**:
+- **v0.14.1** (2025-12-22): Firebase API Key Security Update (regeneration, Git history cleanup, protection)
 - **v0.14.0** (2025-12-22): Custom keyboard reliability fixes (re-appearance bug, animation conflicts)
 - **v0.13.0** (2025-12-22): Station search optimization (10x scrolling performance, caching, loading states)
 - **v0.12.3** (2025-12-18): Toast notification appearance mode fix

@@ -286,7 +286,7 @@ class BusRouteKeyboard: UIView {
     // MARK: - Smart Button Control
     
     func updateButtonStates(for currentInput: String) {
-        let possibleChars = localDataManager.getPossibleNextCharacters(for: currentInput)
+        let possibleChars = localDataManager.getPossibleNextCharactersCached(for: currentInput)
 
         // Update number buttons (disable instead of hide to maintain grid layout)
         for (number, button) in numberButtons {

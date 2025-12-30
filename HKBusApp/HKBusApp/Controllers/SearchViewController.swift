@@ -27,6 +27,7 @@ class SearchViewController: UIViewController {
     private var locationTimer: Timer?
     private var isUpdatingFromKeyboard = false  // Flag to prevent circular updates
     private var isCancellingSearch = false  // Flag to distinguish Cancel button from clear button
+    private var isClearingText = false  // Flag for Clear (x) button to keep keyboard visible
 
     // MARK: - Loading & Empty States
     private var isShowingLoading = false
@@ -65,6 +66,11 @@ class SearchViewController: UIViewController {
 
         // Immediately load nearby routes without waiting for GPS
         loadNearbyRoutesImmediately()
+
+        // Build route search index (async, non-blocking)
+        LocalBusDataManager.shared.buildRouteSearchIndex {
+            print("✅ 路線搜尋索引已就緒")
+        }
 
         // Listen for font size changes
         NotificationCenter.default.addObserver(
@@ -262,7 +268,7 @@ class SearchViewController: UIViewController {
     
     @objc private func dismissKeyboard(_ gesture: UITapGestureRecognizer) {
         let location = gesture.location(in: view)
-        
+
         // Only dismiss keyboard if tap is outside the keyboard area
         if isKeyboardVisible && !customKeyboard.frame.contains(location) {
             view.endEditing(true)
@@ -1009,62 +1015,34 @@ class SearchViewController: UIViewController {
     }
     
     private func searchRoutes(query: String) {
-        guard !isLoading && !query.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return }
 
-        isLoading = true
+        // Local search (instant completion, no loading state needed)
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let results = LocalBusDataManager.shared.searchRoutesLocally(query: query)
+        let endTime = CFAbsoluteTimeGetCurrent()
+        let timeElapsed = String(format: "%.1f", (endTime - startTime) * 1000)
 
-        // Show loading state
-        DispatchQueue.main.async {
-            self.isShowingLoading = true
-            self.searchEmptyMessage = nil
-            self.tableView.reloadData()
+        print("🔍 搜尋完成 - 查詢: '\(query)', 結果: \(results.count), 總耗時: \(timeElapsed)ms")
+
+        // Update UI
+        if results.isEmpty {
+            searchEmptyMessage = "沒有找到路線「\(query)」"
+            routeSearchResults = []
+        } else {
+            searchEmptyMessage = nil
+            routeSearchResults = results
         }
 
-        apiService.searchRoutes(routeNumber: query) { [weak self] result in
+        busDisplayData = [] // Clear nearby routes
+        tableView.refreshControl = nil // Remove refresh control
+        hideFloatingButton(animated: true) // Hide floating button
+
+        // Refresh table and scroll to top
+        tableView.reloadData()
+        if !results.isEmpty {
             DispatchQueue.main.async {
-                self?.isLoading = false
-                self?.isShowingLoading = false
-
-                switch result {
-                case .success(let results):
-                    print("搜尋結果: \(results.count) 個路線")
-
-                    if results.isEmpty {
-                        // Show empty state message
-                        self?.searchEmptyMessage = "沒有找到路線「\(query)」"
-                        self?.routeSearchResults = []
-                    } else {
-                        // Show search results
-                        self?.searchEmptyMessage = nil
-                        self?.routeSearchResults = results
-                    }
-
-                    self?.busDisplayData = [] // Clear initial routes when showing search results
-
-                    // Remove refresh control when showing search results
-                    self?.tableView.refreshControl = nil
-
-                    // Hide floating button when showing search results
-                    self?.hideFloatingButton(animated: true)
-
-                    // Force reload table view data
-                    self?.tableView.reloadData()
-
-                    // Ensure reload completes before scrolling
-                    DispatchQueue.main.async {
-                        if !results.isEmpty {
-                            self?.tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
-                        }
-                    }
-
-                case .failure(let error):
-                    print("搜尋錯誤: \(error.localizedDescription)")
-                    self?.searchEmptyMessage = "搜尋時發生錯誤"
-                    self?.routeSearchResults = []
-
-                    // Reload table view even on failure
-                    self?.tableView.reloadData()
-                }
+                self.tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
             }
         }
     }
@@ -1073,10 +1051,75 @@ class SearchViewController: UIViewController {
 
 // MARK: - UISearchBarDelegate
 extension SearchViewController: UISearchBarDelegate {
+
+    func searchBarShouldClear(_ searchBar: UISearchBar) -> Bool {
+        print("🗑️ Clear (x) button pressed - resetting focus to restore keyboard")
+
+        // 1. Set flag BEFORE system clears text
+        isClearingText = true
+
+        // 2. Manually clear text and state
+        searchBar.text = ""
+        currentSearchText = ""
+
+        // 3. Reset keyboard button states
+        customKeyboard.resetAllButtons()
+
+        // 4. Hide Cancel button (CRITICAL: animated = false to avoid layout changes)
+        searchBar.setShowsCancelButton(false, animated: false)
+
+        // 5. Clear search results
+        routeSearchResults = []
+
+        // 6. Restore refresh control
+        tableView.refreshControl = refreshControl
+
+        // CRITICAL: Perform focus reset FIRST, BEFORE reloadData() to avoid scroll interference
+        print("🔓 Step 1: Unfocusing text field...")
+        searchBar.resignFirstResponder()
+
+        // 7. Delay refocus to ensure clean state
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            print("🔒 Step 2: Refocusing text field to trigger keyboard...")
+            searchBar.becomeFirstResponder()
+
+            // 8. Ensure keyboard shows
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                if !self.isKeyboardVisible {
+                    print("⚠️ Step 3: Keyboard not visible, forcing show...")
+                    self.showKeyboard()
+                }
+
+                // 9. NOW reload data after keyboard is restored
+                print("📱 Step 4: Reloading nearby routes...")
+                if let location = self.currentLocation {
+                    self.loadRoutesFromNearbyStops(location: location)
+                } else {
+                    self.loadNearbyRoutesImmediately()
+                }
+
+                // 10. Reset flag after everything completes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.isClearingText = false
+                    print("✅ Clear (x) handling complete")
+                }
+            }
+        }
+
+        // 11. Return false to block system default behavior
+        return false
+    }
+
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
         // If update is from custom keyboard, skip to prevent circular updates
         guard !isUpdatingFromKeyboard else {
             print("⏭️ textDidChange 跳過 - 來自自定義鍵盤更新")
+            return
+        }
+
+        // Skip if Clear (x) is being handled (already processed by searchBarShouldClear)
+        if isClearingText {
+            print("⏭️ textDidChange 跳過 - Clear (x) 已由 searchBarShouldClear 處理")
             return
         }
 
@@ -1100,24 +1143,47 @@ extension SearchViewController: UISearchBarDelegate {
         searchTimer?.invalidate()
 
         guard hasText else {
-            routeSearchResults = []
+            // Clear (x) button was pressed - perform focus reset to restore keyboard
+            print("🗑️ Clear (x) detected in textDidChange - performing focus reset")
 
-            // Re-add refresh control when returning to nearby routes mode
+            isClearingText = true
+            routeSearchResults = []
             tableView.refreshControl = refreshControl
 
-            // Load nearby routes when search is cleared
-            if let location = currentLocation {
-                loadRoutesFromNearbyStops(location: location)
-            } else {
-                loadNearbyRoutesImmediately()
+            // CRITICAL: Focus reset FIRST, before reloadData()
+            print("🔓 Step 1: Unfocusing...")
+            searchBar.resignFirstResponder()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {  // Back to 0.2 for stability
+                print("🔒 Step 2: Refocusing...")
+                searchBar.becomeFirstResponder()
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {  // Back to 0.15 for stability
+                    if !self.isKeyboardVisible {
+                        print("⚠️ Step 3: Forcing keyboard show...")
+                        self.showKeyboard()
+                    }
+
+                    // Now reload data after keyboard restoration
+                    print("📱 Step 4: Reloading routes...")
+                    if let location = self.currentLocation {
+                        self.loadRoutesFromNearbyStops(location: location)
+                    } else {
+                        self.loadNearbyRoutesImmediately()
+                    }
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        self.isClearingText = false
+                        print("✅ Focus reset complete")
+                    }
+                }
             }
 
-            tableView.reloadData()
             return
         }
 
         // Debounce search with 0.3 second delay
-        searchTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+        searchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { _ in
             self.performSearch(for: searchText)
         }
     }
@@ -1166,24 +1232,36 @@ extension SearchViewController: UISearchBarDelegate {
     }
     
     func searchBarShouldBeginEditing(_ searchBar: UISearchBar) -> Bool {
-        // Show custom keyboard when search bar is tapped
+        // Always show custom keyboard when search bar is tapped
+        print("🔍 searchBarShouldBeginEditing - isKeyboardVisible: \(isKeyboardVisible)")
+        // Always attempt to show keyboard to handle edge cases
+        // (e.g., after Clear (x) button press)
         showKeyboard()
-        return true
-    }
-    
-    func searchBarShouldEndEditing(_ searchBar: UISearchBar) -> Bool {
-        // Always allow search bar to end editing
-        // Keyboard visibility managed separately in didEndEditing
         return true
     }
 
     func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
-        // Hide keyboard when search bar loses focus
-        if isKeyboardVisible {
+        print("🔍 searchBarTextDidEndEditing - isCancellingSearch: \(isCancellingSearch), isClearingText: \(isClearingText)")
+
+        // CRITICAL: If isClearingText is still true, earlier prevention failed - force keyboard restoration
+        if isClearingText {
+            print("⚠️ textDidEndEditing fired during clear - forcing keyboard restoration (fallback)")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.searchBar.becomeFirstResponder()
+                if !self.isKeyboardVisible {
+                    self.showKeyboard()
+                }
+            }
+            isClearingText = false
+            return
+        }
+
+        // Only hide keyboard when "重設" button was pressed
+        if isKeyboardVisible && isCancellingSearch {
             hideKeyboard()
         }
 
-        // Reset cancelling flag if it was set
+        // Reset cancelling flag
         isCancellingSearch = false
     }
 }
@@ -1296,17 +1374,50 @@ extension SearchViewController: UITableViewDelegate {
         if !routeSearchResults.isEmpty {
             // Search results mode
             let routeResult = routeSearchResults[indexPath.row]
-            
+
+            // 🔍 過濾並驗證方向（雙重保護）
+            let validDirections = routeResult.directions.filter { direction in
+                // 方案 1：依賴 stopCount（Step 1 已設定）
+                if let count = direction.stopCount {
+                    return count > 0
+                }
+
+                // 方案 2：額外驗證（安全保障）
+                return LocalBusDataManager.shared.isValidRouteDirection(
+                    routeNumber: routeResult.routeNumber,
+                    company: routeResult.company.rawValue,
+                    direction: direction.direction
+                )
+            }
+
+            // 🚫 如果沒有有效方向，顯示錯誤
+            guard !validDirections.isEmpty else {
+                let alert = UIAlertController(
+                    title: "無可用路線",
+                    message: "路線 \(routeResult.routeNumber) (\(routeResult.company.rawValue)) 暫時沒有可用方向，可能是特殊路線或維護中。",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "確定", style: .default))
+                present(alert, animated: true)
+                return
+            }
+
             // If only one direction, go straight to route detail
             // If multiple directions, show direction selection
-            if routeResult.directions.count == 1 {
-                let direction = routeResult.directions[0]
-                showRouteDetail(routeNumber: routeResult.routeNumber, 
-                              company: routeResult.company, 
+            if validDirections.count == 1 {
+                let direction = validDirections[0]
+                showRouteDetail(routeNumber: routeResult.routeNumber,
+                              company: routeResult.company,
                               direction: direction.direction)
             } else {
+                // 建立包含有效方向的 RouteSearchResult
+                let validResult = RouteSearchResult(
+                    routeNumber: routeResult.routeNumber,
+                    company: routeResult.company,
+                    directions: validDirections
+                )
                 let sourceRect = tableView.rectForRow(at: indexPath)
-                showDirectionSelection(for: routeResult, sourceRect: sourceRect)
+                showDirectionSelection(for: validResult, sourceRect: sourceRect)
             }
         } else {
             // Initial routes mode - go to route detail directly
@@ -1363,6 +1474,12 @@ extension SearchViewController: UITableViewDelegate {
     
     // MARK: - Scroll Detection for Keyboard Handling
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        // Skip keyboard hiding if Clear (x) is being processed
+        if isClearingText {
+            print("⏭️ scrollViewWillBeginDragging 跳過 - Clear (x) 處理中")
+            return
+        }
+
         // Dismiss keyboard when user starts scrolling
         // Only if keyboard is fully visible (alpha == 1) to avoid mid-animation conflicts
         if isKeyboardVisible && customKeyboard.alpha == 1 {
@@ -1412,7 +1529,7 @@ extension SearchViewController: BusRouteKeyboardDelegate {
 
         // Debounce search to avoid excessive API calls (same 0.3s as textDidChange)
         searchTimer?.invalidate()
-        searchTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+        searchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
             guard let self = self else { return }
 
             // Verify state consistency before searching
@@ -1435,7 +1552,7 @@ extension SearchViewController: BusRouteKeyboardDelegate {
 
         // Debounce search to avoid excessive API calls (same 0.3s as textDidChange)
         searchTimer?.invalidate()
-        searchTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+        searchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
             guard let self = self else { return }
 
             // Verify state consistency before searching
@@ -1469,7 +1586,7 @@ extension SearchViewController: BusRouteKeyboardDelegate {
             // Debounce search (same 0.3s as other inputs)
             searchTimer?.invalidate()
             if !currentSearchText.isEmpty {
-                searchTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+                searchTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
                     self?.performSearchWithCurrentText()
                 }
             } else {
