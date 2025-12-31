@@ -354,17 +354,25 @@ App logs should show on launch:
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed update history.
 
-**Latest Version**: v0.14.3 (2025-12-30)
-- **Invalid Route Filtering & Validation System**:
-  - 3-layer defense system: search filtering → direction validation → error handling
-  - Keyboard-level validation prevents typing invalid route numbers
-  - Example: Typing "9" disables "C" button (9C has no stops), typing "90" enables "C" (90C has stops)
-  - Single-direction routes (e.g., A28X) correctly hide direction switch button
-  - LocalBusDataManager.swift: Enhanced getPossibleNextCharacters() with stop data validation
-  - SearchViewController.swift: Direction validation before selection sheet
-  - RouteDetailViewController.swift: Fixed fetchAvailableDirections() to use filtered local data
+**Latest Version**: v0.15.0 (2025-12-31) - KMB Multiple ServiceType Support
+- **🚍 Parallel ServiceType Query for KMB Routes**:
+  - Queries serviceType 1-3 simultaneously to capture special bus services
+  - Problem: KMB routes have multiple serviceType variants (e.g., route 796X with regular + special services)
+  - Solution: Modified `BusAPIService.swift` to parallel query 3 serviceType endpoints for KMB
+  - Impact: Users can now see ALL bus arrivals including special services, not just serviceType=1
+- **Smart ETA Merging**:
+  - Combines ETAs from multiple serviceType responses
+  - Sorts by arrival time for seamless display
+  - Thread-safe with NSLock for concurrent operations
+- **Comprehensive Debug Logging** (for verification):
+  - Logs each serviceType query result
+  - Shows merged ETA count
+  - Console output confirms special services are fetched
+- **Stage 1 Quick Fix**: No data model changes, only API layer modifications
+- **Stage 2 Planned**: Full serviceType support in data models and Python scripts
 
 **Previous Versions**:
+- **v0.14.3** (2025-12-30): Invalid route filtering & validation system
 - **v0.14.1** (2025-12-22): Firebase API Key Security Update (regeneration, Git history cleanup, protection)
 - **v0.14.0** (2025-12-22): Custom keyboard reliability fixes (re-appearance bug, animation conflicts)
 - **v0.13.0** (2025-12-22): Station search optimization (10x scrolling performance, caching, loading states)
