@@ -76,13 +76,17 @@ class BusAPIService {
         case .CTB, .NWFB:
             // CTB/NWFB don't have serviceType concept
             guard let url = URL(string: "https://rt.data.gov.hk/v2/transport/citybus/eta/\(route.companyId)/\(route.stopId)/\(route.route)") else { return [] }
+            print("🚍 [ServiceType] CTB/NWFB single query: \(route.route)")
             return [url]
 
         case .KMB:
             // Query serviceType 1-3 in parallel (covers most cases)
-            return (1...3).compactMap { serviceType in
+            let urls = (1...3).compactMap { serviceType in
                 URL(string: "https://data.etabus.gov.hk/v1/transport/kmb/eta/\(route.stopId)/\(route.route)/\(serviceType)")
             }
+            print("🚍 [ServiceType] KMB parallel query: Route \(route.route), Stop \(route.stopId)")
+            print("   📡 Querying \(urls.count) serviceType endpoints (1-3)")
+            return urls
         }
     }
 
@@ -124,33 +128,48 @@ class BusAPIService {
 
         if route.company == .KMB {
             // KMB: Query multiple serviceType in parallel
+            print("   🔀 Using parallel serviceType query for KMB")
             fetchETAsFromMultipleServices(urls: urls, direction: route.direction, completion: completion)
         } else {
             // CTB/NWFB: Single query (maintain original logic)
+            print("   ➡️ Using single query for \(route.company.rawValue)")
             fetchSingleETA(url: urls[0], direction: route.direction, completion: completion)
         }
     }
 
     // Fetch ETAs from multiple serviceType endpoints in parallel (KMB only)
     private func fetchETAsFromMultipleServices(urls: [URL], direction: String, completion: @escaping (Result<[BusETA], Error>) -> Void) {
+        print("   ⏳ Starting parallel fetch for \(urls.count) serviceType endpoints...")
+
         let group = DispatchGroup()
         var allETAs: [BusETA] = []
         var errors: [Error] = []
         let lock = NSLock()
+        var serviceTypeResults: [Int: Int] = [:] // serviceType -> ETA count
 
-        for url in urls {
+        for (index, url) in urls.enumerated() {
+            let serviceType = index + 1 // serviceType 1, 2, 3
             group.enter()
+
             session.dataTask(with: url) { data, response, error in
                 defer { group.leave() }
 
                 if let error = error {
+                    print("      ❌ ServiceType \(serviceType): Error - \(error.localizedDescription)")
                     lock.lock()
                     errors.append(error)
+                    serviceTypeResults[serviceType] = 0
                     lock.unlock()
                     return
                 }
 
-                guard let data = data else { return }
+                guard let data = data else {
+                    print("      ⚠️ ServiceType \(serviceType): No data")
+                    lock.lock()
+                    serviceTypeResults[serviceType] = 0
+                    lock.unlock()
+                    return
+                }
 
                 do {
                     let etaResponse = try JSONDecoder().decode(BusETAResponse.self, from: data)
@@ -161,17 +180,31 @@ class BusAPIService {
 
                     lock.lock()
                     allETAs.append(contentsOf: filteredETAs)
+                    serviceTypeResults[serviceType] = filteredETAs.count
                     lock.unlock()
+
+                    print("      ✅ ServiceType \(serviceType): Found \(filteredETAs.count) ETA(s)")
                 } catch {
+                    print("      ❌ ServiceType \(serviceType): Parse error - \(error.localizedDescription)")
                     lock.lock()
                     errors.append(error)
+                    serviceTypeResults[serviceType] = 0
                     lock.unlock()
                 }
             }.resume()
         }
 
         group.notify(queue: .main) {
+            let totalETAs = allETAs.count
+            print("   📊 Parallel fetch complete:")
+            for st in 1...3 {
+                let count = serviceTypeResults[st] ?? 0
+                print("      ServiceType \(st): \(count) ETA(s)")
+            }
+            print("   🎯 Total merged ETAs: \(totalETAs)")
+
             if allETAs.isEmpty && !errors.isEmpty {
+                print("   ❌ All serviceType queries failed")
                 completion(.failure(errors.first!))
             } else {
                 // Sort by arrival time (merge different serviceType ETAs)
@@ -181,6 +214,7 @@ class BusAPIService {
                     }
                     return time1 < time2
                 }
+                print("   ✅ Returning \(sortedETAs.count) sorted ETA(s)")
                 completion(.success(sortedETAs))
             }
         }
@@ -188,13 +222,17 @@ class BusAPIService {
 
     // Fetch ETA from single endpoint (CTB/NWFB)
     private func fetchSingleETA(url: URL, direction: String, completion: @escaping (Result<[BusETA], Error>) -> Void) {
+        print("   ⏳ Fetching single ETA...")
+
         session.dataTask(with: url) { data, response, error in
             if let error = error {
+                print("   ❌ Single query error: \(error.localizedDescription)")
                 completion(.failure(error))
                 return
             }
 
             guard let data = data else {
+                print("   ❌ Single query: No data")
                 completion(.failure(APIError.noData))
                 return
             }
@@ -205,8 +243,10 @@ class BusAPIService {
                 let filteredETAs = etaResponse.data.filter { eta in
                     eta.dir.uppercased() == directionPrefix
                 }
+                print("   ✅ Single query complete: \(filteredETAs.count) ETA(s)")
                 completion(.success(filteredETAs))
             } catch {
+                print("   ❌ Single query parse error: \(error.localizedDescription)")
                 completion(.failure(error))
             }
         }.resume()
