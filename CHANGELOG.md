@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - KMB Multiple ServiceType Support (Stage 1)
+- **🚍 Parallel serviceType Query for KMB Routes**: Now queries serviceType 1-3 simultaneously to capture special services
+  - **Problem**: KMB routes may have multiple serviceType variants (e.g., route 1 with serviceType=1 regular + serviceType=2 special)
+  - **Solution**: Modified `BusAPIService.swift` to query 3 serviceType endpoints in parallel for KMB routes
+  - **Impact**: Users can now see ALL bus arrivals including special services, not just serviceType=1
+
+- **New API Methods**:
+  - `etaURLs(for:)`: Generates array of URLs for parallel queries (KMB: 3 URLs, CTB/NWFB: 1 URL)
+  - `fetchETAsFromMultipleServices(urls:direction:completion:)`: Parallel fetch with DispatchGroup and thread-safe result merging
+  - `fetchSingleETA(url:direction:completion:)`: Single query for CTB/NWFB (maintains original logic)
+
+- **Smart ETA Merging**:
+  - Combines ETAs from multiple serviceType responses
+  - Sorts by arrival time (earliest first) for seamless display
+  - Thread-safe using NSLock for concurrent data updates
+  - Graceful error handling (succeeds if any serviceType returns data)
+
+### Changed
+- **`BusAPIService.swift`** (Line 72-213):
+  - Refactored `fetchETA()` to route KMB vs CTB/NWFB differently
+  - Added legacy `etaURL()` method for backwards compatibility
+  - Performance: ~0.5s slower for KMB (3 parallel requests) but shows complete data
+
+### Technical Details
+- **API Endpoints Called**:
+  - KMB: `https://data.etabus.gov.hk/v1/transport/kmb/eta/{stop}/{route}/1`, `/2`, `/3`
+  - CTB/NWFB: `https://rt.data.gov.hk/v2/transport/citybus/eta/{company}/{stop}/{route}` (unchanged)
+- **No UI Changes**: ETA list automatically displays merged results, sorted by time
+- **No Data Model Changes**: This is Stage 1 quick fix, full serviceType support in Stage 2
+
+### Notes
+- This is **Stage 1** of serviceType implementation (quick fix)
+- **Stage 2** (planned): Update data models and Python scripts to formally support serviceType
+- Awaiting user feedback to confirm special services are now visible
+
 ## [0.14.3] - 2025-12-30
 
 ### Fixed - Invalid Route Filtering and Validation

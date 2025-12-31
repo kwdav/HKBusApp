@@ -69,6 +69,24 @@ class BusAPIService {
     }
     
     // MARK: - API URLs
+
+    // Support multiple serviceType for KMB routes
+    private func etaURLs(for route: BusRoute) -> [URL] {
+        switch route.company {
+        case .CTB, .NWFB:
+            // CTB/NWFB don't have serviceType concept
+            guard let url = URL(string: "https://rt.data.gov.hk/v2/transport/citybus/eta/\(route.companyId)/\(route.stopId)/\(route.route)") else { return [] }
+            return [url]
+
+        case .KMB:
+            // Query serviceType 1-3 in parallel (covers most cases)
+            return (1...3).compactMap { serviceType in
+                URL(string: "https://data.etabus.gov.hk/v1/transport/kmb/eta/\(route.stopId)/\(route.route)/\(serviceType)")
+            }
+        }
+    }
+
+    // Legacy single URL method (kept for compatibility)
     private func etaURL(for route: BusRoute) -> URL? {
         switch route.company {
         case .CTB, .NWFB:
@@ -98,38 +116,102 @@ class BusAPIService {
     
     // MARK: - API Methods
     func fetchETA(for route: BusRoute, completion: @escaping (Result<[BusETA], Error>) -> Void) {
-        guard let url = etaURL(for: route) else {
+        let urls = etaURLs(for: route)
+        guard !urls.isEmpty else {
             completion(.failure(APIError.invalidURL))
             return
         }
-        
+
+        if route.company == .KMB {
+            // KMB: Query multiple serviceType in parallel
+            fetchETAsFromMultipleServices(urls: urls, direction: route.direction, completion: completion)
+        } else {
+            // CTB/NWFB: Single query (maintain original logic)
+            fetchSingleETA(url: urls[0], direction: route.direction, completion: completion)
+        }
+    }
+
+    // Fetch ETAs from multiple serviceType endpoints in parallel (KMB only)
+    private func fetchETAsFromMultipleServices(urls: [URL], direction: String, completion: @escaping (Result<[BusETA], Error>) -> Void) {
+        let group = DispatchGroup()
+        var allETAs: [BusETA] = []
+        var errors: [Error] = []
+        let lock = NSLock()
+
+        for url in urls {
+            group.enter()
+            session.dataTask(with: url) { data, response, error in
+                defer { group.leave() }
+
+                if let error = error {
+                    lock.lock()
+                    errors.append(error)
+                    lock.unlock()
+                    return
+                }
+
+                guard let data = data else { return }
+
+                do {
+                    let etaResponse = try JSONDecoder().decode(BusETAResponse.self, from: data)
+                    let directionPrefix = direction.prefix(1).uppercased()
+                    let filteredETAs = etaResponse.data.filter { eta in
+                        eta.dir.uppercased() == directionPrefix
+                    }
+
+                    lock.lock()
+                    allETAs.append(contentsOf: filteredETAs)
+                    lock.unlock()
+                } catch {
+                    lock.lock()
+                    errors.append(error)
+                    lock.unlock()
+                }
+            }.resume()
+        }
+
+        group.notify(queue: .main) {
+            if allETAs.isEmpty && !errors.isEmpty {
+                completion(.failure(errors.first!))
+            } else {
+                // Sort by arrival time (merge different serviceType ETAs)
+                let sortedETAs = allETAs.sorted { eta1, eta2 in
+                    guard let time1 = eta1.arrivalTime, let time2 = eta2.arrivalTime else {
+                        return eta1.arrivalTime != nil
+                    }
+                    return time1 < time2
+                }
+                completion(.success(sortedETAs))
+            }
+        }
+    }
+
+    // Fetch ETA from single endpoint (CTB/NWFB)
+    private func fetchSingleETA(url: URL, direction: String, completion: @escaping (Result<[BusETA], Error>) -> Void) {
         session.dataTask(with: url) { data, response, error in
             if let error = error {
                 completion(.failure(error))
                 return
             }
-            
+
             guard let data = data else {
                 completion(.failure(APIError.noData))
                 return
             }
-            
+
             do {
                 let etaResponse = try JSONDecoder().decode(BusETAResponse.self, from: data)
-                
-                // Filter by direction
-                let directionPrefix = route.direction.prefix(1).uppercased()
+                let directionPrefix = direction.prefix(1).uppercased()
                 let filteredETAs = etaResponse.data.filter { eta in
                     eta.dir.uppercased() == directionPrefix
                 }
-                
                 completion(.success(filteredETAs))
             } catch {
                 completion(.failure(error))
             }
         }.resume()
     }
-    
+
     func fetchStopName(for route: BusRoute, completion: @escaping (Result<String, Error>) -> Void) {
         // Check cache first
         if let cachedName = stopNameCache[route.stopId] {
