@@ -279,6 +279,12 @@ class StopSearchViewController: UIViewController {
 
         print("🔄 浮動按鈕點擊 - 觸發刷新")
 
+        // Track manual refresh event
+        AnalyticsManager.shared.track(.manualTriggered(
+            source: "stop_search_page",
+            method: "floating_button"
+        ))
+
         isFloatingButtonAnimating = true
 
         // Animate button to circle with loading
@@ -619,6 +625,9 @@ class StopSearchViewController: UIViewController {
     @objc private func handleRefresh() {
         print("🔄 用戶下拉刷新站點")
 
+        // Track pull refresh event
+        AnalyticsManager.shared.track(.pullTriggered(source: "stop_search_page"))
+
         // Clear search results to show nearby stops
         stopSearchResults = []
         searchBar.text = ""
@@ -687,6 +696,13 @@ class StopSearchViewController: UIViewController {
         DispatchQueue.main.async {
             self.isLoading = false
             print("站點搜尋結果: \(searchResults.count) 個站點")
+
+            // Track station search performed event
+            AnalyticsManager.shared.track(.stationSearchPerformed(
+                query: query,
+                resultCount: searchResults.count
+            ))
+
             self.stopSearchResults = searchResults
             self.isShowingNearby = false
 
@@ -835,9 +851,17 @@ extension StopSearchViewController: UITableViewDelegate {
         lastTapTime = currentTime
         
         let stopResult = isShowingNearby ? nearbyStops[indexPath.row] : stopSearchResults[indexPath.row]
-        
+
+        // Track station selected event
+        let source = isShowingNearby ? "nearby_stops" : "station_search"
+        AnalyticsManager.shared.track(.stationSelected(
+            stopId: stopResult.stopId,
+            stopName: stopResult.displayName,
+            source: source
+        ))
+
         // No need to save to history for nearby stops since it's location-based
-        
+
         // Navigate to stop routes view
         showStopRoutes(stopResult: stopResult)
     }
@@ -871,7 +895,7 @@ extension StopSearchViewController: UITableViewDelegate {
         guard let currentLocation = currentLocation,
               let stopLat = stopResult.latitude,
               let stopLon = stopResult.longitude else {
-            print("⚠️ 無法計算距離 - 當前位置: \(currentLocation?.description ?? "nil"), 站點座標: \(stopResult.latitude?.description ?? "nil"), \(stopResult.longitude?.description ?? "nil")")
+            print("⚠️ 無法計算距離 - 缺少位置或站點座標數據")
             return ""
         }
 
@@ -880,7 +904,7 @@ extension StopSearchViewController: UITableViewDelegate {
 
         // Debug: Log the first few distance calculations
         if stopResult.stopId == nearbyStops.first?.stopId {
-            print("🔍 距離計算 - 用戶: (\(currentLocation.coordinate.latitude), \(currentLocation.coordinate.longitude)), 站點 '\(stopResult.nameTC)': (\(stopLat), \(stopLon)), 距離: \(Int(distance))米")
+            print("🔍 距離計算 - 站點 '\(stopResult.nameTC)': 距離 \(Int(distance))米 (coordinates masked for privacy)")
         }
 
         // Format distance based on range
@@ -917,8 +941,8 @@ extension StopSearchViewController: CLLocationManagerDelegate {
         
         // Store current location
         currentLocation = location
-        print("📍 用戶位置: 緯度 \(location.coordinate.latitude), 經度 \(location.coordinate.longitude)")
-        
+        print("📍 用戶位置已獲取 (coordinates masked for privacy)")
+
         // Load nearby stops based on current location
         loadNearbyStops(from: location)
     }

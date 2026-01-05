@@ -455,6 +455,12 @@ class SearchViewController: UIViewController {
 
         print("🔄 浮動按鈕點擊 - 觸發刷新")
 
+        // Track manual refresh event
+        AnalyticsManager.shared.track(.manualTriggered(
+            source: "search_page",
+            method: "floating_button"
+        ))
+
         isFloatingButtonAnimating = true
 
         // Animate button to circle with loading
@@ -590,7 +596,10 @@ class SearchViewController: UIViewController {
 
     @objc private func handleRefresh() {
         print("🔄 用戶下拉刷新附近路線")
-        
+
+        // Track pull refresh event
+        AnalyticsManager.shared.track(.pullTriggered(source: "search_page"))
+
         // Hide keyboard if visible
         if isKeyboardVisible {
             hideKeyboard()
@@ -644,7 +653,7 @@ class SearchViewController: UIViewController {
         
         // Strategy 1: Try to use cached/last known location first
         if let cachedLocation = getCachedLocation() {
-            print("📍 使用緩存位置: \(cachedLocation.coordinate.latitude), \(cachedLocation.coordinate.longitude)")
+            print("📍 使用緩存位置 (coordinates masked for privacy)")
             loadRoutesFromNearbyStops(location: cachedLocation)
             return
         }
@@ -690,8 +699,8 @@ class SearchViewController: UIViewController {
     
     private func loadRoutesFromNearbyStops(location: CLLocation) {
         let startTime = CFAbsoluteTimeGetCurrent()
-        print("🔍 開始載入附近站點路線，位置: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-        
+        print("🔍 開始載入附近站點路線 (location obtained)")
+
         // Ensure data is loaded first (this should be fast due to caching)
         guard localDataManager.loadBusData() else {
             print("❌ 無法載入巴士數據")
@@ -1024,6 +1033,13 @@ class SearchViewController: UIViewController {
         let timeElapsed = String(format: "%.1f", (endTime - startTime) * 1000)
 
         print("🔍 搜尋完成 - 查詢: '\(query)', 結果: \(results.count), 總耗時: \(timeElapsed)ms")
+
+        // Track search performed event
+        AnalyticsManager.shared.track(.searchPerformed(
+            query: query,
+            resultCount: results.count,
+            duration: endTime - startTime
+        ))
 
         // Update UI
         if results.isEmpty {
@@ -1406,6 +1422,14 @@ extension SearchViewController: UITableViewDelegate {
             // If multiple directions, show direction selection
             if validDirections.count == 1 {
                 let direction = validDirections[0]
+
+                // Track search result selection
+                AnalyticsManager.shared.track(.resultSelected(
+                    route: routeResult.routeNumber,
+                    company: routeResult.company.rawValue,
+                    position: indexPath.row
+                ))
+
                 showRouteDetail(routeNumber: routeResult.routeNumber,
                               company: routeResult.company,
                               direction: direction.direction)
@@ -1433,10 +1457,17 @@ extension SearchViewController: UITableViewDelegate {
                                           message: "請選擇路線方向",
                                           preferredStyle: .actionSheet)
 
-        for direction in routeResult.directions {
+        for (index, direction) in routeResult.directions.enumerated() {
             // Only show destination without origin - simpler and cleaner
             let title = "→ \(direction.destination)"
             let action = UIAlertAction(title: title, style: .default) { _ in
+                // Track search result selection
+                AnalyticsManager.shared.track(.resultSelected(
+                    route: routeResult.routeNumber,
+                    company: routeResult.company.rawValue,
+                    position: index
+                ))
+
                 self.showRouteDetail(routeNumber: routeResult.routeNumber,
                                    company: routeResult.company,
                                    direction: direction.direction)
@@ -1521,6 +1552,9 @@ struct SearchResult {
 extension SearchViewController: BusRouteKeyboardDelegate {
     
     func keyboardDidTapNumber(_ number: String) {
+        // Track keyboard button tap
+        AnalyticsManager.shared.track(.keyboardButtonTapped(button: number))
+
         currentSearchText += number
         updateSearchBar()
 
@@ -1544,6 +1578,9 @@ extension SearchViewController: BusRouteKeyboardDelegate {
     }
 
     func keyboardDidTapLetter(_ letter: String) {
+        // Track keyboard button tap
+        AnalyticsManager.shared.track(.keyboardButtonTapped(button: letter))
+
         currentSearchText += letter
         updateSearchBar()
 
@@ -1715,8 +1752,23 @@ extension SearchViewController: BusRouteKeyboardDelegate {
 
         if isFavorite {
             favoritesManager.removeFavorite(busRoute)
+
+            // Track favorite removal
+            AnalyticsManager.shared.track(.removed(
+                route: busRoute.route,
+                company: busRoute.companyId,
+                stopId: busRoute.stopId
+            ))
         } else {
             favoritesManager.addFavorite(busRoute, subTitle: "我的")
+
+            // Track favorite addition
+            AnalyticsManager.shared.track(.added(
+                route: busRoute.route,
+                company: busRoute.companyId,
+                stopId: busRoute.stopId,
+                source: "search_page"
+            ))
         }
 
         // Reload the table to update favorite state
@@ -1740,9 +1792,9 @@ extension SearchViewController: CLLocationManagerDelegate {
         
         // Save location for future fast loading
         saveCachedLocation(location)
-        
-        print("✅ 位置獲取成功: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-        
+
+        print("✅ 位置獲取成功 (coordinates masked for privacy)")
+
         // Only load routes if we haven't loaded them yet (avoid duplicate loading)
         if busDisplayData.isEmpty {
             loadRoutesFromNearbyStops(location: location)

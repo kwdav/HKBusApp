@@ -120,22 +120,17 @@ class RouteDetailViewController: UIViewController {
     private func setupCompanyButton() {
         // Create a custom button for the company
         let companyButton = UIButton(type: .system)
-        companyButton.setTitle(company.rawValue, for: .normal)
         companyButton.setTitleColor(.white, for: .normal)
         companyButton.backgroundColor = companyColor(for: company)
         companyButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .medium)
         companyButton.layer.cornerRadius = 4
-        
-        // Use modern button configuration for iOS 15+
-        if #available(iOS 15.0, *) {
-            var config = UIButton.Configuration.plain()
-            config.title = company.rawValue
-            config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
-            companyButton.configuration = config
-        } else {
-            companyButton.contentEdgeInsets = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
-        }
-        
+
+        // Use modern button configuration (iOS 15+)
+        var config = UIButton.Configuration.plain()
+        config.title = company.rawValue
+        config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
+        companyButton.configuration = config
+
         // Add company button to navigation bar
         let companyBarButton = UIBarButtonItem(customView: companyButton)
         navigationItem.rightBarButtonItem = companyBarButton
@@ -376,6 +371,12 @@ class RouteDetailViewController: UIViewController {
 
         print("🔄 浮動按鈕點擊 - 觸發刷新")
 
+        // Track manual refresh event
+        AnalyticsManager.shared.track(.manualTriggered(
+            source: "route_detail_page",
+            method: "floating_button"
+        ))
+
         isFloatingButtonAnimating = true
 
         // Animate button to circle with loading
@@ -518,6 +519,16 @@ class RouteDetailViewController: UIViewController {
 
                     self?.routeDetail = detail
                     self?.updateUI(with: detail)
+
+                    // Track route detail viewed event
+                    let source = self?.targetStopId != nil ? "favorites_page" : "search_page"
+                    AnalyticsManager.shared.track(.detailViewed(
+                        route: detail.routeNumber,
+                        company: detail.company.rawValue,
+                        direction: detail.direction,
+                        source: source
+                    ))
+
                     self?.tableView.reloadData()
                 case .failure(let error):
                     self?.showError(error)
@@ -722,12 +733,12 @@ class RouteDetailViewController: UIViewController {
         
         for (index, stop) in detail.stops.enumerated() {
             // Skip stops without valid coordinates
-            guard let latitude = stop.latitude, 
+            guard let latitude = stop.latitude,
                   let longitude = stop.longitude,
                   latitude.isFinite && longitude.isFinite,
                   latitude >= -90 && latitude <= 90,
                   longitude >= -180 && longitude <= 180 else {
-                print("📍 Skipping stop \(stop.displayName) - invalid coordinates: lat=\(stop.latitude?.description ?? "nil"), lng=\(stop.longitude?.description ?? "nil")")
+                print("📍 Skipping stop \(stop.displayName) - invalid coordinates (coordinates masked for privacy)")
                 continue
             }
             
@@ -806,8 +817,23 @@ class RouteDetailViewController: UIViewController {
 
         if isFavorite {
             favoritesManager.removeFavorite(busRoute)
+
+            // Track favorite removal
+            AnalyticsManager.shared.track(.removed(
+                route: routeNumber,
+                company: company.rawValue,
+                stopId: stop.stopId
+            ))
         } else {
             favoritesManager.addFavorite(busRoute, subTitle: "我的")
+
+            // Track favorite addition
+            AnalyticsManager.shared.track(.added(
+                route: routeNumber,
+                company: company.rawValue,
+                stopId: stop.stopId,
+                source: "route_detail_page"
+            ))
         }
 
         // Reload the cell to update favorite state
@@ -901,6 +927,13 @@ class RouteDetailViewController: UIViewController {
     }
     
     private func switchToDirection(_ newDirection: String) {
+        // Track direction switch event
+        AnalyticsManager.shared.track(.directionSwitched(
+            route: self.routeNumber,
+            fromDirection: self.direction,
+            toDirection: newDirection
+        ))
+
         // Fade out current content
         UIView.animate(withDuration: 0.2, animations: {
             self.view.alpha = 0.5
@@ -1031,7 +1064,17 @@ extension RouteDetailViewController: UITableViewDelegate {
         // Handle tap behavior for expanded/collapsed stops
         if expandedStopIndex == indexPath.row {
             // If already expanded, refresh ETA data instead of collapsing
-            if let cell = tableView.cellForRow(at: indexPath) as? RouteStopTableViewCell {
+            if let cell = tableView.cellForRow(at: indexPath) as? RouteStopTableViewCell,
+               let detail = routeDetail {
+                let stop = detail.stops[indexPath.row]
+
+                // Track ETA refresh event
+                AnalyticsManager.shared.track(.stopETARefreshed(
+                    route: detail.routeNumber,
+                    stopId: stop.stopId,
+                    method: "tap_refresh"
+                ))
+
                 cell.loadAndShowETA()
                 // Restart the refresh timer for continued auto-refresh
                 startETARefreshTimer()
@@ -1042,6 +1085,17 @@ extension RouteDetailViewController: UITableViewDelegate {
             stopETARefreshTimer()
             // Show ETA for this stop, hide others
             expandedStopIndex = indexPath.row
+
+            // Track ETA expanded event
+            if let detail = routeDetail {
+                let stop = detail.stops[indexPath.row]
+                AnalyticsManager.shared.track(.stopETAExpanded(
+                    route: detail.routeNumber,
+                    stopId: stop.stopId,
+                    stopName: stop.displayName
+                ))
+            }
+
             // Start auto-refresh timer for new expanded stop
             startETARefreshTimer()
         }
@@ -1081,8 +1135,8 @@ extension RouteDetailViewController: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         currentLocation = location
-        print("📍 Location updated: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-        
+        print("📍 Location updated (coordinates masked for privacy)")
+
         // Cancel the timeout timer since we got location
         locationTimer?.invalidate()
         locationTimer = nil
