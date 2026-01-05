@@ -70,22 +70,75 @@ class BusAPIService {
     
     // MARK: - API URLs
 
+    // MARK: - Security Helpers
+
+    // Helper method to safely construct URLs with proper encoding
+    private func buildURL(baseURL: String, pathComponents: [String]) -> URL? {
+        guard var components = URLComponents(string: baseURL) else { return nil }
+
+        // Encode each path component
+        let encodedPath = pathComponents.compactMap { component in
+            component.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+        }.joined(separator: "/")
+
+        // Append to existing path
+        components.path += "/" + encodedPath
+
+        return components.url
+    }
+
+    // Validate HTTP response for security and integrity
+    private func validateResponse(_ response: URLResponse?, data: Data?) -> Result<Data, Error> {
+        // Check if response is HTTPURLResponse
+        guard let httpResponse = response as? HTTPURLResponse else {
+            return .failure(APIError.invalidResponse)
+        }
+
+        // Validate status code (200-299)
+        guard (200...299).contains(httpResponse.statusCode) else {
+            print("⚠️ HTTP error: Status code \(httpResponse.statusCode)")
+            return .failure(APIError.invalidResponse)
+        }
+
+        // Validate Content-Type (must contain application/json)
+        if let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type"),
+           !contentType.contains("application/json") {
+            print("⚠️ Invalid Content-Type: \(contentType)")
+            return .failure(APIError.invalidResponse)
+        }
+
+        // Validate data exists
+        guard let data = data else {
+            return .failure(APIError.noData)
+        }
+
+        // Validate response size (10MB limit)
+        let maxSize = 10_000_000 // 10MB
+        guard data.count <= maxSize else {
+            print("⚠️ Response too large: \(data.count) bytes")
+            return .failure(APIError.invalidResponse)
+        }
+
+        return .success(data)
+    }
+
     // Support multiple serviceType for KMB routes
     private func etaURLs(for route: BusRoute) -> [URL] {
         switch route.company {
         case .CTB, .NWFB:
             // CTB/NWFB don't have serviceType concept
-            guard let url = URL(string: "https://rt.data.gov.hk/v2/transport/citybus/eta/\(route.companyId)/\(route.stopId)/\(route.route)") else { return [] }
-            print("🚍 [ServiceType] CTB/NWFB single query: \(route.route)")
+            guard let url = buildURL(baseURL: "https://rt.data.gov.hk/v2/transport/citybus/eta",
+                                     pathComponents: [route.companyId, route.stopId, route.route]) else {
+                return []
+            }
             return [url]
 
         case .KMB:
             // Query serviceType 1-3 in parallel (covers most cases)
             let urls = (1...3).compactMap { serviceType in
-                URL(string: "https://data.etabus.gov.hk/v1/transport/kmb/eta/\(route.stopId)/\(route.route)/\(serviceType)")
+                buildURL(baseURL: "https://data.etabus.gov.hk/v1/transport/kmb/eta",
+                        pathComponents: [route.stopId, route.route, "\(serviceType)"])
             }
-            print("🚍 [ServiceType] KMB parallel query: Route \(route.route), Stop \(route.stopId)")
-            print("   📡 Querying \(urls.count) serviceType endpoints (1-3)")
             return urls
         }
     }
@@ -94,27 +147,33 @@ class BusAPIService {
     private func etaURL(for route: BusRoute) -> URL? {
         switch route.company {
         case .CTB, .NWFB:
-            return URL(string: "https://rt.data.gov.hk/v2/transport/citybus/eta/\(route.companyId)/\(route.stopId)/\(route.route)")
+            return buildURL(baseURL: "https://rt.data.gov.hk/v2/transport/citybus/eta",
+                           pathComponents: [route.companyId, route.stopId, route.route])
         case .KMB:
-            return URL(string: "https://data.etabus.gov.hk/v1/transport/kmb/eta/\(route.stopId)/\(route.route)/1")
+            return buildURL(baseURL: "https://data.etabus.gov.hk/v1/transport/kmb/eta",
+                           pathComponents: [route.stopId, route.route, "1"])
         }
     }
-    
+
     private func stopURL(for route: BusRoute) -> URL? {
         switch route.company {
         case .CTB, .NWFB:
-            return URL(string: "https://rt.data.gov.hk/v2/transport/citybus/stop/\(route.stopId)")
+            return buildURL(baseURL: "https://rt.data.gov.hk/v2/transport/citybus/stop",
+                           pathComponents: [route.stopId])
         case .KMB:
-            return URL(string: "https://data.etabus.gov.hk/v1/transport/kmb/stop/\(route.stopId)")
+            return buildURL(baseURL: "https://data.etabus.gov.hk/v1/transport/kmb/stop",
+                           pathComponents: [route.stopId])
         }
     }
-    
+
     private func routeURL(for route: BusRoute) -> URL? {
         switch route.company {
         case .CTB, .NWFB:
-            return URL(string: "https://rt.data.gov.hk/v2/transport/citybus/route/\(route.companyId)/\(route.route)")
+            return buildURL(baseURL: "https://rt.data.gov.hk/v2/transport/citybus/route",
+                           pathComponents: [route.companyId, route.route])
         case .KMB:
-            return URL(string: "https://data.etabus.gov.hk/v1/transport/kmb/route/\(route.route)/\(route.direction)/1")
+            return buildURL(baseURL: "https://data.etabus.gov.hk/v1/transport/kmb/route",
+                           pathComponents: [route.route, route.direction, "1"])
         }
     }
     
@@ -128,51 +187,46 @@ class BusAPIService {
 
         if route.company == .KMB {
             // KMB: Query multiple serviceType in parallel
-            print("   🔀 Using parallel serviceType query for KMB")
             fetchETAsFromMultipleServices(urls: urls, direction: route.direction, completion: completion)
         } else {
             // CTB/NWFB: Single query (maintain original logic)
-            print("   ➡️ Using single query for \(route.company.rawValue)")
             fetchSingleETA(url: urls[0], direction: route.direction, completion: completion)
         }
     }
 
     // Fetch ETAs from multiple serviceType endpoints in parallel (KMB only)
     private func fetchETAsFromMultipleServices(urls: [URL], direction: String, completion: @escaping (Result<[BusETA], Error>) -> Void) {
-        print("   ⏳ Starting parallel fetch for \(urls.count) serviceType endpoints...")
-
         let group = DispatchGroup()
         var allETAs: [BusETA] = []
         var errors: [Error] = []
         let lock = NSLock()
-        var serviceTypeResults: [Int: Int] = [:] // serviceType -> ETA count
 
-        for (index, url) in urls.enumerated() {
-            let serviceType = index + 1 // serviceType 1, 2, 3
+        for (_, url) in urls.enumerated() {
             group.enter()
 
             session.dataTask(with: url) { data, response, error in
                 defer { group.leave() }
 
                 if let error = error {
-                    print("      ❌ ServiceType \(serviceType): Error - \(error.localizedDescription)")
                     lock.lock()
                     errors.append(error)
-                    serviceTypeResults[serviceType] = 0
                     lock.unlock()
                     return
                 }
 
-                guard let data = data else {
-                    print("      ⚠️ ServiceType \(serviceType): No data")
-                    lock.lock()
-                    serviceTypeResults[serviceType] = 0
-                    lock.unlock()
+                // Validate HTTP response
+                let validationResult = self.validateResponse(response, data: data)
+                guard case .success(let validData) = validationResult else {
+                    if case .failure(let validationError) = validationResult {
+                        lock.lock()
+                        errors.append(validationError)
+                        lock.unlock()
+                    }
                     return
                 }
 
                 do {
-                    let etaResponse = try JSONDecoder().decode(BusETAResponse.self, from: data)
+                    let etaResponse = try JSONDecoder().decode(BusETAResponse.self, from: validData)
                     let directionPrefix = direction.prefix(1).uppercased()
                     let filteredETAs = etaResponse.data.filter { eta in
                         eta.dir.uppercased() == directionPrefix
@@ -180,31 +234,17 @@ class BusAPIService {
 
                     lock.lock()
                     allETAs.append(contentsOf: filteredETAs)
-                    serviceTypeResults[serviceType] = filteredETAs.count
                     lock.unlock()
-
-                    print("      ✅ ServiceType \(serviceType): Found \(filteredETAs.count) ETA(s)")
                 } catch {
-                    print("      ❌ ServiceType \(serviceType): Parse error - \(error.localizedDescription)")
                     lock.lock()
                     errors.append(error)
-                    serviceTypeResults[serviceType] = 0
                     lock.unlock()
                 }
             }.resume()
         }
 
         group.notify(queue: .main) {
-            let totalETAs = allETAs.count
-            print("   📊 Parallel fetch complete:")
-            for st in 1...3 {
-                let count = serviceTypeResults[st] ?? 0
-                print("      ServiceType \(st): \(count) ETA(s)")
-            }
-            print("   🎯 Total merged ETAs: \(totalETAs)")
-
             if allETAs.isEmpty && !errors.isEmpty {
-                print("   ❌ All serviceType queries failed")
                 completion(.failure(errors.first!))
             } else {
                 // Sort by arrival time (merge different serviceType ETAs)
@@ -214,7 +254,6 @@ class BusAPIService {
                     }
                     return time1 < time2
                 }
-                print("   ✅ Returning \(sortedETAs.count) sorted ETA(s)")
                 completion(.success(sortedETAs))
             }
         }
@@ -222,31 +261,29 @@ class BusAPIService {
 
     // Fetch ETA from single endpoint (CTB/NWFB)
     private func fetchSingleETA(url: URL, direction: String, completion: @escaping (Result<[BusETA], Error>) -> Void) {
-        print("   ⏳ Fetching single ETA...")
-
         session.dataTask(with: url) { data, response, error in
             if let error = error {
-                print("   ❌ Single query error: \(error.localizedDescription)")
                 completion(.failure(error))
                 return
             }
 
-            guard let data = data else {
-                print("   ❌ Single query: No data")
-                completion(.failure(APIError.noData))
+            // Validate HTTP response
+            let validationResult = self.validateResponse(response, data: data)
+            guard case .success(let validData) = validationResult else {
+                if case .failure(let validationError) = validationResult {
+                    completion(.failure(validationError))
+                }
                 return
             }
 
             do {
-                let etaResponse = try JSONDecoder().decode(BusETAResponse.self, from: data)
+                let etaResponse = try JSONDecoder().decode(BusETAResponse.self, from: validData)
                 let directionPrefix = direction.prefix(1).uppercased()
                 let filteredETAs = etaResponse.data.filter { eta in
                     eta.dir.uppercased() == directionPrefix
                 }
-                print("   ✅ Single query complete: \(filteredETAs.count) ETA(s)")
                 completion(.success(filteredETAs))
             } catch {
-                print("   ❌ Single query parse error: \(error.localizedDescription)")
                 completion(.failure(error))
             }
         }.resume()
@@ -269,14 +306,18 @@ class BusAPIService {
                 completion(.failure(error))
                 return
             }
-            
-            guard let data = data else {
-                completion(.failure(APIError.noData))
+
+            // Validate HTTP response
+            let validationResult = self.validateResponse(response, data: data)
+            guard case .success(let validData) = validationResult else {
+                if case .failure(let validationError) = validationResult {
+                    completion(.failure(validationError))
+                }
                 return
             }
-            
+
             do {
-                let stopInfo = try JSONDecoder().decode(BusStopInfo.self, from: data)
+                let stopInfo = try JSONDecoder().decode(BusStopInfo.self, from: validData)
                 let stopName = stopInfo.data.name_tc
                 
                 // Cache the result
@@ -740,12 +781,12 @@ class BusAPIService {
         case .CTB, .NWFB:
             let response = try JSONDecoder().decode(CTBRouteStopResponse.self, from: data)
             var stops: [BusStop] = []
-            
+
             // Create basic stops structure
             for stopData in response.data {
                 let stop = BusStop(
                     stopId: stopData.stop,
-                    sequence: Int(stopData.seq) ?? 1,
+                    sequence: stopData.seq,
                     nameTC: stopNameCache[stopData.stop] ?? "載入中...",
                     nameEN: nil,
                     latitude: nil,
@@ -1874,7 +1915,8 @@ enum APIError: Error, LocalizedError {
     case invalidURL
     case noData
     case decodingError
-    
+    case invalidResponse
+
     var errorDescription: String? {
         switch self {
         case .invalidURL:
@@ -1883,6 +1925,8 @@ enum APIError: Error, LocalizedError {
             return "沒有資料"
         case .decodingError:
             return "資料解析錯誤"
+        case .invalidResponse:
+            return "無效的 HTTP 響應"
         }
     }
 }

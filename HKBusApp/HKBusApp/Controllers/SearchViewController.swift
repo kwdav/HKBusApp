@@ -676,25 +676,31 @@ class SearchViewController: UIViewController {
     }
     
     private func getCachedLocation() -> CLLocation? {
-        // Try to get last known location from UserDefaults
-        let defaults = UserDefaults.standard
-        if let lat = defaults.object(forKey: "lastKnownLat") as? Double,
-           let lng = defaults.object(forKey: "lastKnownLng") as? Double {
-            let cachedTime = defaults.object(forKey: "lastKnownTime") as? TimeInterval ?? 0
-            
+        // Try to get last known location from Keychain (secure storage)
+        let keychain = KeychainHelper.shared
+        if let lat = keychain.getDouble(forKey: "lastKnownLat"),
+           let lng = keychain.getDouble(forKey: "lastKnownLng"),
+           let cachedTime = keychain.getDouble(forKey: "lastKnownTime") {
+
             // Use cached location if it's less than 10 minutes old
             if Date().timeIntervalSince1970 - cachedTime < 600 {
                 return CLLocation(latitude: lat, longitude: lng)
+            } else {
+                // Clean up expired location data
+                keychain.delete(forKey: "lastKnownLat")
+                keychain.delete(forKey: "lastKnownLng")
+                keychain.delete(forKey: "lastKnownTime")
             }
         }
         return nil
     }
-    
+
     private func saveCachedLocation(_ location: CLLocation) {
-        let defaults = UserDefaults.standard
-        defaults.set(location.coordinate.latitude, forKey: "lastKnownLat")
-        defaults.set(location.coordinate.longitude, forKey: "lastKnownLng")
-        defaults.set(Date().timeIntervalSince1970, forKey: "lastKnownTime")
+        // Save to Keychain for secure storage
+        let keychain = KeychainHelper.shared
+        keychain.save(location.coordinate.latitude, forKey: "lastKnownLat")
+        keychain.save(location.coordinate.longitude, forKey: "lastKnownLng")
+        keychain.save(Date().timeIntervalSince1970, forKey: "lastKnownTime")
     }
     
     private func loadRoutesFromNearbyStops(location: CLLocation) {
