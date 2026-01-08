@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-01-06
+
+### Added
+- **📱 App Store Submission Preparation**
+  - Complete App Store listing materials prepared in `APP_STORE_DESCRIPTION.md`
+  - App name: **香港巴士時間** (HK Bus App)
+  - Subtitle: 香港巴士實時到站時間
+  - Full Traditional Chinese description with feature highlights
+  - App metadata: keywords, categories, review notes
+  - Privacy policy and support information
+  - Ready for App Store Connect submission
+
+### Documentation
+- **APP_STORE_DESCRIPTION.md**: Complete App Store listing content
+  - Promotional text (170 characters)
+  - Feature descriptions with emojis
+  - Location services explanation
+  - Privacy & data usage statements
+  - What's New section (v1.0.0)
+  - App Privacy questionnaire mapping
+  - Technical specifications (iOS 16.0+, Bundle ID, version info)
+
+### Important Notes
+- **Supported Bus Companies**: CTB (城巴) and KMB (九巴)
+  - ⚠️ **NWFB (新巴) merged with CTB on July 1, 2023** - no longer an independent company
+  - App presents as "CTB + KMB" service to users
+  - Backend still uses government CTB/NWFB API endpoints (API structure unchanged)
+  - All NWFB routes now served via CTB API with proper routing
+- App ready for submission after all critical security fixes (v0.17.0)
+
 ## [0.17.0] - 2026-01-05
 
 ### Security - Critical Privacy & Security Fixes
